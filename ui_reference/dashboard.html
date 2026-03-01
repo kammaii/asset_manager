@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Asset Management Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#0d7ff2",
+                        background: {
+                            light: "#f5f7f8",
+                            dark: "#000000", // Deep black as requested
+                        },
+                        surface: {
+                            dark: "#111111", // Slightly lighter for cards
+                            border: "#222222"
+                        },
+                        accent: {
+                            red: "#ff4d4f",   // For positive (as requested)
+                            blue: "#0d7ff2",  // For negative (as requested)
+                            green: "#0bda5b",
+                            purple: "#a855f7",
+                            yellow: "#eab308"
+                        }
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                        sans: ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        lg: "0.5rem",
+                        xl: "0.75rem",
+                        full: "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-x-hidden">
+<!-- Top Navigation -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-surface-border px-6 py-4 bg-white dark:bg-background-dark sticky top-0 z-50">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-3 text-slate-900 dark:text-white">
+<div class="size-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+<h2 class="text-lg font-bold leading-tight tracking-tight">Asset Master</h2>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-900 dark:text-white text-sm font-semibold hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium hover:text-slate-900 dark:hover:text-white transition-colors" href="#">Portfolio</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium hover:text-slate-900 dark:hover:text-white transition-colors" href="#">Transactions</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium hover:text-slate-900 dark:hover:text-white transition-colors" href="#">Analysis</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<label class="hidden sm:flex flex-col min-w-40 h-9 max-w-64 relative group">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="block w-full h-full rounded-full border border-slate-200 dark:border-surface-border bg-slate-50 dark:bg-surface-dark pl-10 pr-4 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-1 focus:ring-primary focus:border-primary transition-all" placeholder="Search assets..."/>
+</label>
+<button class="size-9 rounded-full flex items-center justify-center bg-slate-100 dark:bg-surface-dark text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<div class="size-9 rounded-full bg-slate-200 dark:bg-surface-dark bg-center bg-cover border border-slate-200 dark:border-surface-border" data-alt="User profile avatar" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCX3Iq7nt0R5KYSh3GxWLlapyqNaDgwDSfWMyoqbXdXWnZ1j2juJnLbuzzMh2oPjZjNV7OurxcyFMm5VR7h-dAWjrxzuK1D4sEf1o0yyG_-lZxLxGaEWgSLsfN4VkwXHYuinH0uCHdBYfAOorB4FYa_Awi0vH8tEJTC026EvG7qLZUbg3p7gNtFUa4npjsxD2VaL5-eguhFZgeJ_Xv5IRtQrvnXvk4zZFdwC0_YRZeoXT3U6qfnjzjsbszGtNvjGoj4R_sn6-QooxYT");'></div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+<div>
+<h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
+<p class="text-slate-500 dark:text-slate-400 mt-1">Overview of your personal assets</p>
+</div>
+<div class="flex items-center bg-slate-100 dark:bg-surface-dark rounded-lg p-1 border border-slate-200 dark:border-surface-border">
+<button class="px-3 py-1.5 rounded bg-white dark:bg-surface-border shadow-sm text-xs font-semibold text-slate-900 dark:text-white transition-all">Last 1 Year</button>
+<button class="px-3 py-1.5 rounded hover:bg-slate-200 dark:hover:bg-opacity-50 text-xs font-medium text-slate-500 dark:text-slate-400 transition-all">All Time</button>
+</div>
+</div>
+<!-- Top Summary Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Total Assets -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border shadow-sm flex flex-col gap-1">
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Assets</p>
+<div class="flex items-end gap-2 mt-1">
+<span class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">$1,245,000</span>
+</div>
+<div class="flex items-center gap-1 mt-2 text-accent-red">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<span class="text-xs font-bold">+11.2%</span>
+<span class="text-xs font-medium text-slate-400 ml-1">vs last month</span>
+</div>
+</div>
+<!-- Total Profit/Loss -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border shadow-sm flex flex-col gap-1">
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Profit/Loss</p>
+<div class="flex items-end gap-2 mt-1">
+<span class="text-2xl font-bold text-accent-red tracking-tight">+$125,400</span>
+</div>
+<div class="flex items-center gap-1 mt-2 text-accent-red">
+<span class="material-symbols-outlined text-sm">arrow_upward</span>
+<span class="text-xs font-bold">+5.4%</span>
+</div>
+</div>
+<!-- Day Change -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border shadow-sm flex flex-col gap-1">
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400">Day Change</p>
+<div class="flex items-end gap-2 mt-1">
+<span class="text-2xl font-bold text-accent-blue tracking-tight">-$1,200</span>
+</div>
+<div class="flex items-center gap-1 mt-2 text-accent-blue">
+<span class="material-symbols-outlined text-sm">trending_down</span>
+<span class="text-xs font-bold">-0.1%</span>
+</div>
+</div>
+<!-- Cash Balance -->
+<div class="p-5 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border shadow-sm flex flex-col gap-1 relative overflow-hidden group">
+<div class="absolute right-[-20px] top-[-20px] size-24 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors"></div>
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400 relative z-10">Cash Balance</p>
+<div class="flex items-end gap-2 mt-1 relative z-10">
+<span class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">$50,000</span>
+</div>
+<div class="mt-3 flex gap-2 relative z-10">
+<button class="text-xs font-bold text-primary hover:text-white border border-primary hover:bg-primary px-3 py-1 rounded-full transition-all">Deposit</button>
+<button class="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1 rounded-full transition-all">Withdraw</button>
+</div>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Asset Allocation (Donut) -->
+<div class="rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border p-6 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white">Asset Allocation</h3>
+<button class="text-slate-400 hover:text-white"><span class="material-symbols-outlined">more_horiz</span></button>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
+<!-- Donut Chart Representation using SVG -->
+<div class="relative size-48">
+<svg class="size-full -rotate-90" viewbox="0 0 36 36">
+<!-- Background Circle -->
+<path class="text-surface-border" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3.8"></path>
+<!-- Segment 1: Stocks (Purple) - 50% -->
+<path class="text-accent-purple" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="50, 100" stroke-width="3.8"></path>
+<!-- Segment 2: Pension (Blue) - 30% -->
+<path class="text-accent-blue" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="30, 100" stroke-dashoffset="-50" stroke-width="3.8"></path>
+<!-- Segment 3: Cash (Yellow) - 15% -->
+<path class="text-accent-yellow" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="15, 100" stroke-dashoffset="-80" stroke-width="3.8"></path>
+<!-- Segment 4: Crypto (Red) - 5% -->
+<path class="text-accent-red" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="5, 100" stroke-dashoffset="-95" stroke-width="3.8"></path>
+</svg>
+<!-- Center Text -->
+<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+<span class="text-sm font-medium text-slate-500 dark:text-slate-400">Total</span>
+<span class="text-xl font-bold text-slate-900 dark:text-white">$1.2M</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-6">
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-accent-purple"></span>
+<div class="flex flex-col">
+<span class="text-xs text-slate-500 dark:text-slate-400">Stocks</span>
+<span class="text-sm font-bold text-slate-900 dark:text-white">50%</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-accent-blue"></span>
+<div class="flex flex-col">
+<span class="text-xs text-slate-500 dark:text-slate-400">Pension</span>
+<span class="text-sm font-bold text-slate-900 dark:text-white">30%</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-accent-yellow"></span>
+<div class="flex flex-col">
+<span class="text-xs text-slate-500 dark:text-slate-400">Cash</span>
+<span class="text-sm font-bold text-slate-900 dark:text-white">15%</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-accent-red"></span>
+<div class="flex flex-col">
+<span class="text-xs text-slate-500 dark:text-slate-400">Other</span>
+<span class="text-sm font-bold text-slate-900 dark:text-white">5%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Monthly Asset Trend (Bar Chart) -->
+<div class="lg:col-span-2 rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border p-6 flex flex-col">
+<div class="flex justify-between items-center mb-2">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white">Monthly Asset Trend</h3>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1">
+<span class="size-2 rounded-full bg-accent-purple"></span>
+<span class="text-xs text-slate-500 dark:text-slate-400">Stock</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="size-2 rounded-full bg-primary"></span>
+<span class="text-xs text-slate-500 dark:text-slate-400">Cash</span>
+</div>
+</div>
+</div>
+<div class="mb-4">
+<span class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">$1,245,000</span>
+<span class="text-sm text-accent-red ml-2 font-medium">+12.5%</span>
+</div>
+<div class="flex-1 w-full flex items-end justify-between gap-2 sm:gap-4 mt-4 h-[200px]">
+<!-- Chart Bars Loop -->
+<!-- Bar 1 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[20%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[30%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Jan</span>
+</div>
+<!-- Bar 2 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[25%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[35%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Feb</span>
+</div>
+<!-- Bar 3 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[22%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[40%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Mar</span>
+</div>
+<!-- Bar 4 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[18%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[45%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Apr</span>
+</div>
+<!-- Bar 5 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[20%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[42%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">May</span>
+</div>
+<!-- Bar 6 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[25%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[48%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Jun</span>
+</div>
+<!-- Bar 7 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[22%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[55%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Jul</span>
+</div>
+<!-- Bar 8 -->
+<div class="flex flex-col items-center flex-1 h-full justify-end gap-1 group cursor-pointer">
+<div class="w-full max-w-[24px] bg-primary/30 rounded-t-sm h-[15%] group-hover:opacity-80 transition-opacity relative"></div>
+<div class="w-full max-w-[24px] bg-accent-purple rounded-b-sm h-[60%] group-hover:opacity-80 transition-opacity"></div>
+<span class="text-[10px] text-slate-500 mt-2 font-medium">Aug</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Tables Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Stocks Table -->
+<div class="rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border overflow-hidden">
+<div class="p-6 border-b border-slate-200 dark:border-surface-border flex justify-between items-center">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white">Stocks Portfolio</h3>
+<a class="text-sm font-medium text-primary hover:text-primary/80" href="#">View All</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-slate-200 dark:border-surface-border/50 text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+<th class="p-4">Item Name (Qty)</th>
+<th class="p-4 text-right">Avg Price</th>
+<th class="p-4 text-right">Total Amt</th>
+<th class="p-4 text-right">Profit / Gain</th>
+</tr>
+</thead>
+<tbody class="text-sm divide-y divide-slate-200 dark:divide-surface-border/50">
+<!-- Row 1 -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-white p-1 flex items-center justify-center">
+<img class="w-full h-full object-contain" data-alt="McDonalds logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1_2Aikmy0tetzzbMXn8MbboO39XmIDaYLXQ985k8gI_DR8PpwPJigpoUSpgYQ400ZKhI6Sq4x1vsYGjOquMzOjiSTPHmhxa71gpln7QPJzHQcbBUEqebF3PVPl9QP9iF_vAc1L12hdH8sOg5Enc4IR--3RhUvZGv5ylh978aDRpXzcn24pRZtBaI0fo4OUBjXWSTYXrXPVi8_PgCY2xY91wCBl6p5bc8ccohIBGxCSzvU0sgD8zCU1WpfqJZUxU_HmAJgO-UaetcE"/>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-white">McDonald's</span>
+<span class="text-xs text-slate-500">MCD (120)</span>
+</div>
+</div>
+</td>
+<td class="p-4 text-right font-medium text-slate-700 dark:text-slate-300">$285.40</td>
+<td class="p-4 text-right font-bold text-slate-900 dark:text-white">$34,248</td>
+<td class="p-4 text-right">
+<div class="flex flex-col items-end">
+<span class="font-bold text-accent-red">+$4,200</span>
+<span class="text-xs text-accent-red bg-accent-red/10 px-1.5 py-0.5 rounded">+14.2%</span>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-white p-1 flex items-center justify-center">
+<img class="w-full h-full object-contain" data-alt="Amazon logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwDNpJoIS5ShPHuI7ClWCSJBQXdGdb8-aQTNLckGODJjEuAxFib3J-GFFcnZbryGfAzIdGzy-2jd-3nzd0EtEX5EqoiuFy5XXgWckLYbRQ0QrroXNgqpuNjSZLTGEyOOlK3-4LlF0ogb724bYrxGqs2iA_vK_fXWfZWb6Qr01CBjuzbOsbaGeLWtvaMerdg6MHjyjVpdx4bkyBPqylgIDqUU3eOxlXp0ei7tYyjGEv_2etx615EqyErGOQy9T13kDye1zSpzlAhgsY"/>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-white">Amazon</span>
+<span class="text-xs text-slate-500">AMZN (50)</span>
+</div>
+</div>
+</td>
+<td class="p-4 text-right font-medium text-slate-700 dark:text-slate-300">$175.20</td>
+<td class="p-4 text-right font-bold text-slate-900 dark:text-white">$8,760</td>
+<td class="p-4 text-right">
+<div class="flex flex-col items-end">
+<span class="font-bold text-accent-blue">-$350</span>
+<span class="text-xs text-accent-blue bg-accent-blue/10 px-1.5 py-0.5 rounded">-3.8%</span>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-black p-1 flex items-center justify-center">
+<img class="w-full h-full object-contain filter invert" data-alt="Apple logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAD_xoAJ8OSDyA3_CRkbCEWz_esTvko0kEJvgNLhd3N84InEmwc1aIkEgwx_prRrAAYwIjppWYK7yU1yjkm6CMQWwm8ieox0s9cl1OyChKElw2NAQqziXxuVzhnRW1Le8Zpsvhxk1eBaaxpWcwjTRpjmcKBN4WaTUzenz03ofrhmrX9sM7XDW4V891k0p3m9Co-OPVWJcL3ZzAyV5_nrCaGKTZaXx9gvoS7p9q3SszuArZBq0W_BN5C8Uq7owbz1KIoUw2wl3JARJJB"/>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-white">Apple</span>
+<span class="text-xs text-slate-500">AAPL (200)</span>
+</div>
+</div>
+</td>
+<td class="p-4 text-right font-medium text-slate-700 dark:text-slate-300">$182.10</td>
+<td class="p-4 text-right font-bold text-slate-900 dark:text-white">$36,420</td>
+<td class="p-4 text-right">
+<div class="flex flex-col items-end">
+<span class="font-bold text-accent-red">+$2,800</span>
+<span class="text-xs text-accent-red bg-accent-red/10 px-1.5 py-0.5 rounded">+8.1%</span>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Pension Table -->
+<div class="rounded-xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-surface-border overflow-hidden">
+<div class="p-6 border-b border-slate-200 dark:border-surface-border flex justify-between items-center">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white">Pension Portfolio</h3>
+<a class="text-sm font-medium text-primary hover:text-primary/80" href="#">View All</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-slate-200 dark:border-surface-border/50 text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+<th class="p-4">Item Name (Qty)</th>
+<th class="p-4 text-right">Principal</th>
+<th class="p-4 text-right">Total Amt</th>
+<th class="p-4 text-right">Profit / Gain</th>
+</tr>
+</thead>
+<tbody class="text-sm divide-y divide-slate-200 dark:divide-surface-border/50">
+<!-- Row 1 -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-primary/20 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">savings</span>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-white">US Growth Fund</span>
+<span class="text-xs text-slate-500">ETF-500 (1500)</span>
+</div>
+</div>
+</td>
+<td class="p-4 text-right font-medium text-slate-700 dark:text-slate-300">$45,000</td>
+<td class="p-4 text-right font-bold text-slate-900 dark:text-white">$52,300</td>
+<td class="p-4 text-right">
+<div class="flex flex-col items-end">
+<span class="font-bold text-accent-red">+$7,300</span>
+<span class="text-xs text-accent-red bg-accent-red/10 px-1.5 py-0.5 rounded">+16.2%</span>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-accent-purple/20 text-accent-purple flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">currency_exchange</span>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-white">Global Bond</span>
+<span class="text-xs text-slate-500">BND-GL (800)</span>
+</div>
+</div>
+</td>
+<td class="p-4 text-right font-medium text-slate-700 dark:text-slate-300">$20,000</td>
+<td class="p-4 text-right font-bold text-slate-900 dark:text-white">$20,400</td>
+<td class="p-4 text-right">
+<div class="flex flex-col items-end">
+<span class="font-bold text-accent-red">+$400</span>
+<span class="text-xs text-accent-red bg-accent-red/10 px-1.5 py-0.5 rounded">+2.0%</span>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-accent-yellow/20 text-accent-yellow flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">real_estate_agent</span>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-white">REITs Portfolio</span>
+<span class="text-xs text-slate-500">VNQ (300)</span>
+</div>
+</div>
+</td>
+<td class="p-4 text-right font-medium text-slate-700 dark:text-slate-300">$15,000</td>
+<td class="p-4 text-right font-bold text-slate-900 dark:text-white">$14,700</td>
+<td class="p-4 text-right">
+<div class="flex flex-col items-end">
+<span class="font-bold text-accent-blue">-$300</span>
+<span class="text-xs text-accent-blue bg-accent-blue/10 px-1.5 py-0.5 rounded">-2.0%</span>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</body></html>
