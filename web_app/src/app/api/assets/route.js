@@ -14,7 +14,7 @@ export async function GET() {
             let currentPrice = asset.avgPrice;
             let previousClose = asset.avgPrice;
 
-            if (asset.type === 'stock' && asset.symbol) {
+            if ((asset.type === 'stock' || asset.type === 'pension') && asset.symbol) {
                 let querySymbol = asset.symbol;
                 if (asset.region === 'KR' && !querySymbol.includes('.')) {
                     querySymbol = querySymbol + '.KS'; // default to KOSPI
@@ -97,7 +97,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -107,7 +107,7 @@ export async function POST(request) {
         const prc = parseFloat(price);
 
         const assetsRef = collection(db, 'assets');
-        const q = query(assetsRef, where('type', '==', type), where('region', '==', region || 'KR'), where('symbol', '==', symbol || ''), where('name', '==', name));
+        const q = query(assetsRef, where('type', '==', type), where('region', '==', region || 'KR'), where('symbol', '==', symbol || ''), where('name', '==', name), where('account', '==', account || '일반'));
         const snapshot = await getDocs(q);
 
         let asset = null;
@@ -148,6 +148,7 @@ export async function POST(request) {
             const newDocRef = await addDoc(assetsRef, {
                 type,
                 region: region || 'KR',
+                account: account || '일반',
                 symbol: symbol || '',
                 name,
                 quantity: newQty,

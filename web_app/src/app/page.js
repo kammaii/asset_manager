@@ -242,7 +242,11 @@ export default function Dashboard() {
 
         {/* Portfolio Tables */}
         {['stock', 'pension', 'cash'].map(assetType => {
-          const filteredAssets = assets.filter(a => a.type === assetType);
+          const filteredAssets = assets.filter(a => a.type === assetType).sort((a, b) => {
+            const valA = a.totalValue * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
+            const valB = b.totalValue * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
+            return valB - valA;
+          });
           const title = assetType === 'stock' ? '주식' : assetType === 'pension' ? '연금' : '현금';
 
           if (filteredAssets.length === 0 && assetType !== 'stock') return null; // Ensure at least stock table shows even if empty
@@ -263,6 +267,7 @@ export default function Dashboard() {
                       </tr>
                     ) : (
                       <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
+                        <th className="p-4">구분</th>
                         <th className="p-4">종목 코드 (이름)</th>
                         <th className="p-4 text-right">수량</th>
                         <th className="p-4 text-right">매수 단가 (평균)</th>
@@ -276,7 +281,7 @@ export default function Dashboard() {
                   <tbody className="text-sm divide-y divide-slate-100">
                     {filteredAssets.length === 0 ? (
                       <tr>
-                        <td colSpan={assetType === 'cash' ? "2" : "7"} className="p-8 text-center text-slate-500">
+                        <td colSpan={assetType === 'cash' ? "2" : "8"} className="p-8 text-center text-slate-500">
                           내역이 없습니다. "자산 추가" 버튼을 통해 시작해보세요.
                         </td>
                       </tr>
@@ -299,6 +304,9 @@ export default function Dashboard() {
                             </>
                           ) : (
                             <>
+                              <td className="p-4 text-slate-700 font-bold whitespace-nowrap">
+                                <span className="px-2 py-1 bg-slate-100 rounded-md text-xs">{asset.account || '일반'}</span>
+                              </td>
                               <td className="p-4">
                                 <div className="flex flex-col">
                                   <span className="font-bold text-slate-900">

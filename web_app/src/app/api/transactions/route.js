@@ -32,6 +32,7 @@ export async function GET() {
         date: data.date,
         quantity: data.quantity,
         price: data.price,
+        account: data.account || asset.account || '일반',
         createdAt: createdAt,
         type: asset.type,
         region: asset.region,

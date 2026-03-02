@@ -4,6 +4,8 @@ const useAssetStore = create((set, get) => ({
     assets: [],
     history: [],
     transactions: [],
+    accountTypes: [],
+    cashInstitutions: [],
     loading: false,
     error: null,
 
@@ -84,14 +86,43 @@ const useAssetStore = create((set, get) => ({
 
     fetchTransactions: async () => {
         try {
-            const res = await fetch('/api/history'); // Using history endpoint as shortcut since transactions route wasn't created, or create transactions route. Wait, history yields month groups. I will create an api/transactions/route.js later or fetch from assets. Let's create transactions fetch.
-            // I should use api/transactions
             const txRes = await fetch('/api/transactions');
             if (!txRes.ok) throw new Error('Failed to fetch transactions');
             const data = await txRes.json();
             set({ transactions: data });
         } catch (error) {
             console.error(error);
+        }
+    },
+
+    fetchSettings: async () => {
+        try {
+            const res = await fetch('/api/settings');
+            if (!res.ok) throw new Error('Failed to fetch settings');
+            const data = await res.json();
+            set({
+                accountTypes: data.accountTypes || ['키움증권', 'NH투자증권', '미래에셋', 'IRP', 'ISA', '일반'],
+                cashInstitutions: data.cashInstitutions || ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행']
+            });
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+        }
+    },
+
+    updateSettings: async (newSettings) => {
+        try {
+            // Optimistically update local state
+            set((state) => ({ ...state, ...newSettings }));
+
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSettings),
+            });
+            if (!res.ok) throw new Error('Failed to update settings');
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            // Revert might be needed here ideally, but for now we log it.
         }
     },
 

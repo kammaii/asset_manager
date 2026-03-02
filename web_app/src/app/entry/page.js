@@ -6,19 +6,21 @@ import useAssetStore from '@/store/useAssetStore';
 import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash } from 'lucide-react';
 
 export default function EntryPage() {
-    const { assets, fetchAssets, transactions, fetchTransactions, addAsset, updateTransaction, deleteTransaction, loading } = useAssetStore();
+    const { assets, fetchAssets, transactions, fetchTransactions, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, fetchSettings, updateSettings, loading } = useAssetStore();
     const [activeTab, setActiveTab] = useState('stock');
     const [editingId, setEditingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
-    const [cashInstitutions, setCashInstitutions] = useState(['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행']);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [newInstitution, setNewInstitution] = useState('');
+    const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
+    const [newAccountType, setNewAccountType] = useState('');
     const [currentExchangeRate, setCurrentExchangeRate] = useState(null);
 
     const [formData, setFormData] = useState({
         action: 'buy',
         date: new Date().toISOString().split('T')[0],
         region: 'KR',
+        account: '일반',
         symbol: '',
         name: '',
         quantity: '',
@@ -26,14 +28,9 @@ export default function EntryPage() {
     });
 
     useEffect(() => {
+        fetchSettings();
         fetchAssets();
         fetchTransactions();
-
-        // Load custom institutions from local storage
-        const savedInstitutions = localStorage.getItem('customCashInstitutions');
-        if (savedInstitutions) {
-            setCashInstitutions(JSON.parse(savedInstitutions));
-        }
 
         // Fetch current exchange rate
         const fetchRate = async () => {
@@ -50,24 +47,20 @@ export default function EntryPage() {
         fetchRate();
     }, [fetchAssets, fetchTransactions]);
 
-    const saveInstitutions = (newInsts) => {
-        setCashInstitutions(newInsts);
-        localStorage.setItem('customCashInstitutions', JSON.stringify(newInsts));
-    };
-
-    const addInstitution = () => {
+    const addInstitution = async () => {
         if (newInstitution.trim() && !cashInstitutions.includes(newInstitution.trim())) {
-            saveInstitutions([...cashInstitutions, newInstitution.trim()]);
+            const updated = [...cashInstitutions, newInstitution.trim()];
+            await updateSettings({ cashInstitutions: updated });
             setFormData(prev => ({ ...prev, name: newInstitution.trim(), symbol: newInstitution.trim() }));
             setNewInstitution('');
             setIsDropdownOpen(false);
         }
     };
 
-    const removeInstitution = (instToRemove, e) => {
+    const removeInstitution = async (instToRemove, e) => {
         e.stopPropagation();
         const updated = cashInstitutions.filter(inst => inst !== instToRemove);
-        saveInstitutions(updated);
+        await updateSettings({ cashInstitutions: updated });
         if (formData.name === instToRemove) {
             setFormData(prev => ({ ...prev, name: '', symbol: '' }));
         }
@@ -76,6 +69,30 @@ export default function EntryPage() {
     const handleInstitutionSelect = (inst) => {
         setFormData(prev => ({ ...prev, name: inst, symbol: inst }));
         setIsDropdownOpen(false);
+    };
+
+    const addAccountType = async () => {
+        if (newAccountType.trim() && !accountTypes.includes(newAccountType.trim())) {
+            const updated = [...accountTypes, newAccountType.trim()];
+            await updateSettings({ accountTypes: updated });
+            setFormData(prev => ({ ...prev, account: newAccountType.trim() }));
+            setNewAccountType('');
+            setIsAccountDropdownOpen(false);
+        }
+    };
+
+    const removeAccountType = async (typeToRemove, e) => {
+        e.stopPropagation();
+        const updated = accountTypes.filter(t => t !== typeToRemove);
+        await updateSettings({ accountTypes: updated });
+        if (formData.account === typeToRemove) {
+            setFormData(prev => ({ ...prev, account: '일반' }));
+        }
+    };
+
+    const handleAccountSelect = (type) => {
+        setFormData(prev => ({ ...prev, account: type }));
+        setIsAccountDropdownOpen(false);
     };
 
     const handleInputChange = (e) => {
@@ -89,6 +106,7 @@ export default function EntryPage() {
             action: trx.action,
             date: trx.date,
             region: trx.region || 'KR',
+            account: trx.account || '일반',
             symbol: trx.symbol || '',
             name: trx.name || '',
             quantity: trx.quantity.toString(),
@@ -99,7 +117,7 @@ export default function EntryPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', symbol: '', name: '', quantity: '', price: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -141,6 +159,7 @@ export default function EntryPage() {
                 await updateTransaction(editingId, {
                     type: activeTab,
                     region: formData.region,
+                    account: formData.account || '일반',
                     symbol: formData.symbol.toUpperCase(),
                     name: formData.name,
                     action: formData.action,
@@ -184,6 +203,7 @@ export default function EntryPage() {
                     action: formData.action,
                     date: formData.date,
                     region: formData.region,
+                    account: formData.account || '일반',
                     symbol: formData.symbol.toUpperCase(),
                     name: formData.name,
                     quantity: parseFloat(formData.quantity),
@@ -341,6 +361,48 @@ export default function EntryPage() {
                                         <label className="text-xs font-semibold text-slate-500">날짜</label>
                                         <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
                                     </div>
+                                    <div className="flex flex-col gap-1 min-w-[130px] relative">
+                                        <label className="text-xs font-semibold text-slate-500">구분 (계좌)</label>
+                                        <div
+                                            className="border border-slate-300 rounded px-2 py-1.5 text-sm flex justify-between items-center cursor-pointer bg-white"
+                                            onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
+                                        >
+                                            <span className={formData.account ? "text-slate-900" : "text-slate-400"}>
+                                                {formData.account || "일반"}
+                                            </span>
+                                            <ChevronDown size={16} className="text-slate-400" />
+                                        </div>
+                                        {isAccountDropdownOpen && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
+                                                {accountTypes.map((type, idx) => (
+                                                    <div key={idx} className="flex justify-between items-center px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => handleAccountSelect(type)}>
+                                                        <span className="text-sm font-medium text-slate-700">{type}</span>
+                                                        <button
+                                                            onClick={(e) => removeAccountType(type, e)}
+                                                            className="text-slate-300 hover:text-red-500 p-1"
+                                                            title="삭제"
+                                                        >
+                                                            <Trash size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <div className="p-2 flex gap-2 border-t border-slate-200 bg-slate-50">
+                                                    <input
+                                                        type="text"
+                                                        value={newAccountType}
+                                                        onChange={(e) => setNewAccountType(e.target.value)}
+                                                        placeholder="새 항목..."
+                                                        className="flex-1 w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onKeyDown={(e) => e.key === 'Enter' && addAccountType()}
+                                                    />
+                                                    <button onClick={(e) => { e.preventDefault(); addAccountType(); }} className="bg-slate-200 hover:bg-slate-300 text-slate-700 p-1.5 rounded transition-colors">
+                                                        <Plus size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     {(activeTab === 'stock' || activeTab === 'cash') && (
                                         <div className="flex flex-col gap-1 min-w-[100px]">
                                             <label className="text-xs font-semibold text-slate-500">통화/국가</label>
@@ -410,6 +472,7 @@ export default function EntryPage() {
                                     ) : (
                                         <tr>
                                             <th className="px-4 py-3 font-semibold text-center w-16">국가</th>
+                                            <th className="px-4 py-3 font-semibold w-24">구분</th>
                                             <th className="px-4 py-3 font-semibold w-24">유형</th>
                                             <th className="px-4 py-3 font-semibold w-24">날짜</th>
                                             <th className="px-4 py-3 font-semibold w-24">종목코드</th>
@@ -424,7 +487,7 @@ export default function EntryPage() {
                                 <tbody className="divide-y divide-slate-200">
                                     {filteredTransactions.length === 0 ? (
                                         <tr>
-                                            <td colSpan={activeTab === 'cash' ? "6" : "9"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
+                                            <td colSpan={activeTab === 'cash' ? "6" : "10"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
                                         </tr>
                                     ) : (
                                         filteredTransactions.map(trx => (
@@ -449,6 +512,9 @@ export default function EntryPage() {
                                                     <>
                                                         <td className="px-4 py-3 font-bold text-center text-slate-700 bg-slate-50/50">
                                                             {trx.region === 'US' ? '🇺🇸' : trx.region === 'KR' ? '🇰🇷' : '-'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-slate-700 font-medium">
+                                                            {trx.account || '일반'}
                                                         </td>
                                                         <td className={`px-4 py-3 font-bold ${trx.action === 'buy' ? 'text-red-500' : 'text-blue-500'}`}>
                                                             {trx.action === 'buy' ? '매수' : '매도'}

@@ -35,7 +35,7 @@ export async function GET() {
             const asset = docSnap.data();
             let currentPrice = asset.avgPrice || 0;
 
-            if (asset.type === 'stock' && asset.symbol) {
+            if ((asset.type === 'stock' || asset.type === 'pension') && asset.symbol) {
                 let querySymbol = asset.symbol;
                 if (asset.region === 'KR' && !querySymbol.includes('.')) {
                     querySymbol = querySymbol + '.KS';
