@@ -56,6 +56,21 @@ const useAssetStore = create((set, get) => ({
         }
     },
 
+    deleteAsset: async (id) => {
+        set({ loading: true, error: null });
+        try {
+            const res = await fetch(`/api/assets/${id}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) throw new Error('Failed to delete asset');
+            await get().fetchAssets();
+            await get().fetchTransactions();
+        } catch (error) {
+            set({ error: error.message, loading: false });
+            throw error;
+        }
+    },
+
     updateTransaction: async (id, updatedData) => {
         set({ loading: true, error: null });
         try {
@@ -65,6 +80,23 @@ const useAssetStore = create((set, get) => ({
                 body: JSON.stringify(updatedData),
             });
             if (!res.ok) throw new Error('Failed to update transaction');
+            await get().fetchAssets();
+            await get().fetchTransactions();
+        } catch (error) {
+            set({ error: error.message, loading: false });
+            throw error;
+        }
+    },
+
+    updateAsset: async (id, updatedData) => {
+        set({ loading: true, error: null });
+        try {
+            const res = await fetch(`/api/assets/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedData),
+            });
+            if (!res.ok) throw new Error('Failed to update asset');
             await get().fetchAssets();
             await get().fetchTransactions();
         } catch (error) {
@@ -133,8 +165,8 @@ const useAssetStore = create((set, get) => ({
 
         // overall
         const totalAssets = assets.reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
-        const totalPrincipal = assets.reduce((sum, a) => sum + convert(a.principal, a.region), 0);
-        const totalProfit = totalAssets - totalPrincipal;
+        const totalPrincipal = assets.reduce((sum, a) => sum + convert(a.netInvestment !== undefined ? a.netInvestment : a.principal, a.region), 0);
+        const totalProfit = assets.reduce((sum, a) => sum + convert(a.profitGain, a.region), 0);
         const profitRate = totalPrincipal > 0 ? (totalProfit / totalPrincipal) * 100 : 0;
         const dayChange = assets.reduce((sum, a) => sum + convert(a.dayChange, a.region), 0);
 
@@ -159,11 +191,19 @@ const useAssetStore = create((set, get) => ({
         const cashProfit = totalCash - cashPrincipal;
         const cashRate = cashPrincipal > 0 ? (cashProfit / cashPrincipal) * 100 : 0;
 
+        // real_estate
+        const realEstateAssets = assets.filter(a => a.type === 'real_estate');
+        const totalRealEstate = realEstateAssets.reduce((sum, a) => sum + convert((a.netInvestment || 0) + (a.profitGain || 0), a.region), 0);
+        const realEstatePrincipal = realEstateAssets.reduce((sum, a) => sum + convert(a.netInvestment || 0, a.region), 0);
+        const realEstateProfit = realEstateAssets.reduce((sum, a) => sum + convert(a.profitGain || 0, a.region), 0);
+        const realEstateRate = realEstatePrincipal > 0 ? (realEstateProfit / realEstatePrincipal) * 100 : 0;
+
         return {
             totalAssets, totalProfit, profitRate, dayChange,
             totalStock, stockProfit, stockRate,
             totalPension, pensionProfit, pensionRate,
             totalCash, cashProfit, cashRate,
+            totalRealEstate, realEstateProfit, realEstateRate,
         };
     }
 }));

@@ -82,7 +82,7 @@ export async function PUT(request, { params }) {
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 
         const body = await request.json();
-        const { date, quantity, price, action, type, region, symbol, name, account } = body;
+        const { date, quantity, price, action, type, region, symbol, name, account, expense, deposit, realEstateCurrentPrice } = body;
 
         const txRef = doc(db, 'transactions', id);
         const txSnap = await getDoc(txRef);
@@ -142,6 +142,14 @@ export async function PUT(request, { params }) {
             await recalculateAsset(newAssetId);
         } else {
             await recalculateAsset(oldAssetId);
+        }
+
+        if (type === 'real_estate') {
+            await updateDoc(doc(db, 'assets', newAssetId), {
+                expense: parseFloat(expense) || 0,
+                deposit: parseFloat(deposit) || 0,
+                realEstateCurrentPrice: parseFloat(realEstateCurrentPrice) || 0,
+            });
         }
 
         return NextResponse.json({ success: true }, { status: 200 });

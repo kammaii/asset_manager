@@ -46,6 +46,31 @@ export async function GET() {
                         }
                     }
                 }
+            } else if (asset.type === 'real_estate') {
+                const expense = asset.expense || 0;
+                const deposit = asset.deposit || 0;
+                const buyPrice = asset.principal; // Purchase price
+
+                currentPrice = asset.realEstateCurrentPrice || asset.avgPrice;
+                previousClose = currentPrice;
+
+                const netInvestment = buyPrice + expense - deposit;
+                const profitGain = currentPrice - buyPrice - expense;
+                const totalValue = netInvestment + profitGain;
+                const profitRate = netInvestment > 0 ? (profitGain / netInvestment) * 100 : 0;
+
+                return {
+                    ...asset,
+                    currentPrice,
+                    totalValue,
+                    profitGain,
+                    profitRate,
+                    dayChange: 0,
+                    previousClose,
+                    netInvestment,
+                    expense,
+                    deposit
+                };
             } else if (asset.type === 'cash') {
                 if (asset.region === 'US') {
                     const fetchQuote = async (sym) => {
@@ -61,7 +86,6 @@ export async function GET() {
                         }
                     } catch (error) {
                         console.error('Failed to fetch KRW=X exchange rate:', error.message);
-                        // Fallback exchange rate if fetch fails
                         currentPrice = 1400;
                         previousClose = 1400;
                     }
@@ -97,7 +121,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date, account } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -135,17 +159,23 @@ export async function POST(request) {
             }
 
             const assetDoc = doc(db, 'assets', asset.id);
-            await updateDoc(assetDoc, {
+            const updateData = {
                 quantity: newQty,
                 avgPrice: newAvgPrice,
                 principal: newPrincipal,
                 updatedAt: serverTimestamp()
-            });
+            };
+            if (type === 'real_estate') {
+                if (expense !== undefined) updateData.expense = parseFloat(expense) || 0;
+                if (deposit !== undefined) updateData.deposit = parseFloat(deposit) || 0;
+                if (realEstateCurrentPrice !== undefined) updateData.realEstateCurrentPrice = parseFloat(realEstateCurrentPrice) || 0;
+            }
+            await updateDoc(assetDoc, updateData);
         } else {
             if (action === 'sell') {
                 return NextResponse.json({ error: 'Cannot sell asset not owned' }, { status: 400 });
             }
-            const newDocRef = await addDoc(assetsRef, {
+            const newAssetData = {
                 type,
                 region: region || 'KR',
                 account: account || '일반',
@@ -156,7 +186,13 @@ export async function POST(request) {
                 principal: newPrincipal,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
-            });
+            };
+            if (type === 'real_estate') {
+                newAssetData.expense = expense ? parseFloat(expense) : 0;
+                newAssetData.deposit = deposit ? parseFloat(deposit) : 0;
+                newAssetData.realEstateCurrentPrice = realEstateCurrentPrice ? parseFloat(realEstateCurrentPrice) : newAvgPrice;
+            }
+            const newDocRef = await addDoc(assetsRef, newAssetData);
             assetId = newDocRef.id;
         }
 

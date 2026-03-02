@@ -24,7 +24,10 @@ export default function EntryPage() {
         symbol: '',
         name: '',
         quantity: '',
-        price: ''
+        price: '',
+        expense: '',
+        deposit: '',
+        realEstateCurrentPrice: ''
     });
 
     useEffect(() => {
@@ -110,14 +113,39 @@ export default function EntryPage() {
             symbol: trx.symbol || '',
             name: trx.name || '',
             quantity: trx.quantity.toString(),
-            price: trx.price.toString()
+            price: trx.price.toString(),
+            expense: trx.expense?.toString() || '',
+            deposit: trx.deposit?.toString() || '',
+            realEstateCurrentPrice: trx.realEstateCurrentPrice?.toString() || ''
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleRealEstateEdit = (asset, trx) => {
+        if (!trx) {
+            alert("연결된 거래 내역을 찾을 수 없습니다.");
+            return;
+        }
+        setEditingId(trx.id);
+        setFormData({
+            action: trx.action || 'buy',
+            date: trx.date,
+            region: asset.region || 'KR',
+            account: asset.account || '일반',
+            symbol: asset.symbol || '',
+            name: asset.name || '',
+            quantity: trx.quantity.toString(),
+            price: trx.price.toString(),
+            expense: asset.expense?.toString() || '',
+            deposit: asset.deposit?.toString() || '',
+            realEstateCurrentPrice: asset.realEstateCurrentPrice?.toString() || asset.currentPrice?.toString() || asset.avgPrice?.toString() || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -148,6 +176,11 @@ export default function EntryPage() {
                     alert("필수 항목을 모두 입력해주세요 (기관명, 현재 잔고, 날짜).");
                     return;
                 }
+            } else if (activeTab === 'real_estate') {
+                if (!formData.name || !formData.date || !formData.price || !formData.expense || !formData.realEstateCurrentPrice) {
+                    alert("필수 항목을 모두 입력해주세요 (부동산명, 매수일, 매수가, 비용, 현재가).");
+                    return;
+                }
             } else {
                 if (!formData.name || !formData.quantity || !formData.price || !formData.action || !formData.date) {
                     alert("필수 항목을 모두 입력해주세요 (종목명, 수량, 단가, 날짜, 매수/매도).");
@@ -156,7 +189,7 @@ export default function EntryPage() {
             }
 
             if (editingId) {
-                await updateTransaction(editingId, {
+                const updatePayload = {
                     type: activeTab,
                     region: formData.region,
                     account: formData.account || '일반',
@@ -164,9 +197,15 @@ export default function EntryPage() {
                     name: formData.name,
                     action: formData.action,
                     date: formData.date,
-                    quantity: parseFloat(formData.quantity),
+                    quantity: parseFloat(formData.quantity) || 1,
                     price: parseFloat(formData.price)
-                });
+                };
+                if (activeTab === 'real_estate') {
+                    updatePayload.expense = parseFloat(formData.expense) || 0;
+                    updatePayload.deposit = parseFloat(formData.deposit) || 0;
+                    updatePayload.realEstateCurrentPrice = parseFloat(formData.realEstateCurrentPrice) || 0;
+                }
+                await updateTransaction(editingId, updatePayload);
                 cancelEdit();
             } else if (isCashBalanceMatch) {
                 const targetBalance = parseFloat(formData.quantity);
@@ -197,6 +236,22 @@ export default function EntryPage() {
                 });
 
                 setFormData(prev => ({ ...prev, name: '', quantity: '', price: '' }));
+            } else if (activeTab === 'real_estate') {
+                await addAsset({
+                    type: activeTab,
+                    action: 'buy', // default to buy for real estate addition
+                    date: formData.date,
+                    region: formData.region || 'KR',
+                    account: formData.account || '일반',
+                    symbol: '',
+                    name: formData.name,
+                    quantity: 1, // Real estate is treated as 1 unit
+                    price: parseFloat(formData.price),
+                    expense: parseFloat(formData.expense) || 0,
+                    deposit: parseFloat(formData.deposit) || 0,
+                    realEstateCurrentPrice: parseFloat(formData.realEstateCurrentPrice) || parseFloat(formData.price)
+                });
+                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' }));
             } else {
                 await addAsset({
                     type: activeTab,
@@ -348,6 +403,33 @@ export default function EntryPage() {
                                         <input type="number" name="quantity" value={formData.quantity} onChange={handleInputChange} placeholder="Ex: 5000000" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
                                     </div>
                                 </>
+                            ) : activeTab === 'real_estate' ? (
+                                <>
+                                    <div className="flex flex-col gap-1 min-w-[130px]">
+                                        <label className="text-xs font-semibold text-slate-500">부동산명</label>
+                                        <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ex: 반포자이" className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[130px]">
+                                        <label className="text-xs font-semibold text-slate-500">매수일</label>
+                                        <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[120px]">
+                                        <label className="text-xs font-semibold text-slate-500">매수가</label>
+                                        <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="Ex: 500000000" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[100px]">
+                                        <label className="text-xs font-semibold text-slate-500">비용 (취등록세 등)</label>
+                                        <input type="number" name="expense" value={formData.expense || ''} onChange={handleInputChange} placeholder="0" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[100px]">
+                                        <label className="text-xs font-semibold text-slate-500">보증금 (선택)</label>
+                                        <input type="number" name="deposit" value={formData.deposit || ''} onChange={handleInputChange} placeholder="0" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[120px]">
+                                        <label className="text-xs font-semibold text-slate-500">현재가</label>
+                                        <input type="number" name="realEstateCurrentPrice" value={formData.realEstateCurrentPrice || ''} onChange={handleInputChange} placeholder="0" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
+                                    </div>
+                                </>
                             ) : (
                                 <>
                                     <div className="flex flex-col gap-1 min-w-[120px]">
@@ -446,7 +528,7 @@ export default function EntryPage() {
 
                     <div className="p-4 sm:p-6 pb-4 flex justify-between items-center bg-white border-b border-slate-200">
                         <h3 className="text-md font-bold text-slate-800">
-                            {activeTab === 'cash' ? '현금 현황' : '거래 내역 (Transaction History)'}
+                            {activeTab === 'cash' ? '현금 현황' : activeTab === 'real_estate' ? '부동산 현황 리스트' : '거래 내역 (Transaction History)'}
                         </h3>
                         {activeTab === 'cash' && currentExchangeRate && (
                             <div className="text-sm font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
@@ -469,6 +551,18 @@ export default function EntryPage() {
                                             <th className="px-4 py-3 font-semibold text-center w-1/6">증감</th>
                                             <th className="px-4 py-3 font-semibold text-center w-1/6">관리</th>
                                         </tr>
+                                    ) : activeTab === 'real_estate' ? (
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold min-w-[150px]">부동산명</th>
+                                            <th className="px-4 py-3 font-semibold">매수일</th>
+                                            <th className="px-4 py-3 font-semibold text-right">매수가</th>
+                                            <th className="px-4 py-3 font-semibold text-right">비용</th>
+                                            <th className="px-4 py-3 font-semibold text-right">보증금</th>
+                                            <th className="px-4 py-3 font-semibold text-right">실투자금</th>
+                                            <th className="px-4 py-3 font-semibold text-right">현재가</th>
+                                            <th className="px-4 py-3 font-semibold text-right">수익</th>
+                                            <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
+                                        </tr>
                                     ) : (
                                         <tr>
                                             <th className="px-4 py-3 font-semibold text-center w-16">국가</th>
@@ -485,77 +579,142 @@ export default function EntryPage() {
                                     )}
                                 </thead>
                                 <tbody className="divide-y divide-slate-200">
-                                    {filteredTransactions.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={activeTab === 'cash' ? "6" : "10"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
-                                        </tr>
-                                    ) : (
-                                        filteredTransactions.map(trx => (
-                                            <tr key={trx.id} className="hover:bg-slate-50 transition-colors">
-                                                {activeTab === 'cash' ? (
-                                                    // Cash Table Row Rendering
-                                                    <>
-                                                        <td className="px-4 py-3 text-slate-500">{trx.date}</td>
-                                                        <td className="px-4 py-3 text-slate-800 font-bold">{trx.name}</td>
-                                                        <td className="px-4 py-3 font-bold text-slate-700 bg-slate-50/50">
-                                                            {trx.region === 'US' ? '달러 (USD)' : '원 (KRW)'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">
-                                                            {formatCurrency(trx.quantity, trx.region)}
-                                                        </td>
-                                                        <td className={`px-4 py-3 font-bold text-center ${trx.action === 'buy' ? 'text-green-500' : 'text-[#ff4d4f]'}`}>
-                                                            {trx.action === 'buy' ? '증가' : '감소'}
-                                                        </td>
-                                                    </>
-                                                ) : (
-                                                    // Original Table Row Rendering
-                                                    <>
-                                                        <td className="px-4 py-3 font-bold text-center text-slate-700 bg-slate-50/50">
-                                                            {trx.region === 'US' ? '🇺🇸' : trx.region === 'KR' ? '🇰🇷' : '-'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-slate-700 font-medium">
-                                                            {trx.account || '일반'}
-                                                        </td>
-                                                        <td className={`px-4 py-3 font-bold ${trx.action === 'buy' ? 'text-red-500' : 'text-blue-500'}`}>
-                                                            {trx.action === 'buy' ? '매수' : '매도'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-slate-500">{trx.date}</td>
-                                                        <td className="px-4 py-3 font-medium text-slate-900">{trx.symbol || '-'}</td>
-                                                        <td className="px-4 py-3 text-slate-600 font-medium">{trx.name}</td>
-                                                        <td className="px-4 py-3 text-right text-slate-600 font-mono">{formatCurrency(trx.price, trx.region)}</td>
-                                                        <td className="px-4 py-3 text-right text-slate-600 font-mono">{trx.quantity.toLocaleString()}</td>
-                                                        <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">{formatCurrency(trx.price * trx.quantity, trx.region)}</td>
-                                                    </>
-                                                )}
-                                                {/* Common Management Actions Column */}
-                                                <td className="px-4 py-3 text-center">
-                                                    {deletingId === trx.id ? (
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            <span className="text-xs text-red-500 font-bold mr-1">삭제콜?</span>
-                                                            <button onClick={() => confirmDelete(trx.id)} className="px-2 py-1 text-white bg-red-500 hover:bg-red-600 rounded text-xs font-bold transition-colors">Y</button>
-                                                            <button onClick={cancelDelete} className="px-2 py-1 text-slate-500 bg-slate-200 hover:bg-slate-300 rounded text-xs transition-colors">N</button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <button
-                                                                onClick={() => handleEdit(trx)}
-                                                                className="p-1.5 text-slate-400 hover:text-[#0d7ff2] hover:bg-blue-50 rounded transition-colors"
-                                                                title="수정"
-                                                            >
-                                                                <Edit2 size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteClick(trx.id)}
-                                                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                                                                title="삭제"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </td>
+                                    {activeTab === 'real_estate' ? (
+                                        filteredAssets.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="8" className="p-8 text-center text-slate-500">부동산 현황이 없습니다.</td>
                                             </tr>
-                                        ))
+                                        ) : (
+                                            filteredAssets.map(asset => (
+                                                <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-4 py-3 text-slate-800 font-bold">{asset.name}</td>
+                                                    <td className="px-4 py-3 text-slate-500">
+                                                        {transactions.find(t => t.asset_id === asset.id)?.date || '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-slate-900 font-mono">
+                                                        {formatCurrency(asset.principal, asset.region)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-slate-600 font-mono">
+                                                        {formatCurrency(asset.expense || 0, asset.region)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-slate-600 font-mono">
+                                                        {formatCurrency(asset.deposit || 0, asset.region)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-[#0d7ff2] font-bold font-mono">
+                                                        {formatCurrency(asset.netInvestment || 0, asset.region)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">
+                                                        {formatCurrency(asset.currentPrice || asset.avgPrice, asset.region)}
+                                                    </td>
+                                                    <td className={`px-4 py-3 text-right font-bold font-mono ${asset.profitGain >= 0 ? 'text-[#ff4d4f]' : 'text-[#0d7ff2]'}`}>
+                                                        {asset.profitGain > 0 ? '+' : ''}{formatCurrency(asset.profitGain || 0, asset.region)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {(() => {
+                                                            const trx = transactions.find(t => t.asset_id === asset.id);
+                                                            if (!trx) return null;
+                                                            return deletingId === trx.id ? (
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <span className="text-xs text-red-500 font-bold mr-1">삭제콜?</span>
+                                                                    <button onClick={() => confirmDelete(trx.id)} className="px-2 py-1 text-white bg-red-500 hover:bg-red-600 rounded text-xs font-bold transition-colors">Y</button>
+                                                                    <button onClick={cancelDelete} className="px-2 py-1 text-slate-500 bg-slate-200 hover:bg-slate-300 rounded text-xs transition-colors">N</button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handleRealEstateEdit(asset, trx)}
+                                                                        className="p-1.5 text-slate-400 hover:text-[#0d7ff2] hover:bg-blue-50 rounded transition-colors"
+                                                                        title="수정"
+                                                                    >
+                                                                        <Edit2 size={16} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteClick(trx.id)}
+                                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                                        title="삭제"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )
+                                    ) : (
+                                        filteredTransactions.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={activeTab === 'cash' ? "6" : "10"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
+                                            </tr>
+                                        ) : (
+                                            filteredTransactions.map(trx => (
+                                                <tr key={trx.id} className="hover:bg-slate-50 transition-colors">
+                                                    {activeTab === 'cash' ? (
+                                                        // Cash Table Row Rendering
+                                                        <>
+                                                            <td className="px-4 py-3 text-slate-500">{trx.date}</td>
+                                                            <td className="px-4 py-3 text-slate-800 font-bold">{trx.name}</td>
+                                                            <td className="px-4 py-3 font-bold text-slate-700 bg-slate-50/50">
+                                                                {trx.region === 'US' ? '달러 (USD)' : '원 (KRW)'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">
+                                                                {formatCurrency(trx.quantity, trx.region)}
+                                                            </td>
+                                                            <td className={`px-4 py-3 font-bold text-center ${trx.action === 'buy' ? 'text-green-500' : 'text-[#ff4d4f]'}`}>
+                                                                {trx.action === 'buy' ? '증가' : '감소'}
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        // Original Table Row Rendering
+                                                        <>
+                                                            <td className="px-4 py-3 font-bold text-center text-slate-700 bg-slate-50/50">
+                                                                {trx.region === 'US' ? '🇺🇸' : trx.region === 'KR' ? '🇰🇷' : '-'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-slate-700 font-medium">
+                                                                {trx.account || '일반'}
+                                                            </td>
+                                                            <td className={`px-4 py-3 font-bold ${trx.action === 'buy' ? 'text-red-500' : 'text-blue-500'}`}>
+                                                                {trx.action === 'buy' ? '매수' : '매도'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-slate-500">{trx.date}</td>
+                                                            <td className="px-4 py-3 font-medium text-slate-900">{trx.symbol || '-'}</td>
+                                                            <td className="px-4 py-3 text-slate-600 font-medium">{trx.name}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-600 font-mono">{formatCurrency(trx.price, trx.region)}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-600 font-mono">{trx.quantity.toLocaleString()}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">{formatCurrency(trx.price * trx.quantity, trx.region)}</td>
+                                                        </>
+                                                    )}
+                                                    {/* Common Management Actions Column */}
+                                                    <td className="px-4 py-3 text-center">
+                                                        {deletingId === trx.id ? (
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <span className="text-xs text-red-500 font-bold mr-1">삭제콜?</span>
+                                                                <button onClick={() => confirmDelete(trx.id)} className="px-2 py-1 text-white bg-red-500 hover:bg-red-600 rounded text-xs font-bold transition-colors">Y</button>
+                                                                <button onClick={cancelDelete} className="px-2 py-1 text-slate-500 bg-slate-200 hover:bg-slate-300 rounded text-xs transition-colors">N</button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <button
+                                                                    onClick={() => handleEdit(trx)}
+                                                                    className="p-1.5 text-slate-400 hover:text-[#0d7ff2] hover:bg-blue-50 rounded transition-colors"
+                                                                    title="수정"
+                                                                >
+                                                                    <Edit2 size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteClick(trx.id)}
+                                                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                                    title="삭제"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )
                                     )}
                                 </tbody>
                             </table>

@@ -33,6 +33,13 @@ export async function GET() {
 
         await Promise.all(assetsSnap.docs.map(async (docSnap) => {
             const asset = docSnap.data();
+            if (asset.type === 'real_estate') {
+                const currentPrice = asset.realEstateCurrentPrice || asset.avgPrice || 0;
+                const value = (currentPrice - (asset.deposit || 0)) * (asset.region === 'US' ? exchangeRate : 1);
+                balances['real_estate'] = (balances['real_estate'] || 0) + value;
+                return;
+            }
+
             let currentPrice = asset.avgPrice || 0;
 
             if ((asset.type === 'stock' || asset.type === 'pension') && asset.symbol) {
