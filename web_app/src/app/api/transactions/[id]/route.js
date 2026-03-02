@@ -1,18 +1,31 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, getDocs, collection, query, where, deleteDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite';
 
-function recalculateAsset(assetId) {
-    const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId);
-    if (!asset) return;
+async function recalculateAsset(assetId) {
+    const assetRef = doc(db, 'assets', assetId);
+    const assetSnap = await getDoc(assetRef);
+    if (!assetSnap.exists()) return;
 
-    // Get all transactions for this asset in chronological order
-    const txs = db.prepare('SELECT * FROM transactions WHERE asset_id = ? ORDER BY date ASC, createdAt ASC').all(assetId);
+    // Get all transactions for this asset
+    const txsRef = collection(db, 'transactions');
+    const q = query(txsRef, where('asset_id', '==', assetId));
+    const txsSnap = await getDocs(q);
 
-    if (txs.length === 0) {
+    if (txsSnap.empty) {
         // No transactions left, delete the asset
-        db.prepare('DELETE FROM assets WHERE id = ?').run(assetId);
+        await deleteDoc(assetRef);
         return;
     }
+
+    const txs = txsSnap.docs.map(doc => doc.data());
+    // chronologoical order
+    txs.sort((a, b) => {
+        if (a.date !== b.date) {
+            return new Date(a.date) - new Date(b.date);
+        }
+        return new Date(a.createdAt?.toDate?.() || 0) - new Date(b.createdAt?.toDate?.() || 0);
+    });
 
     let currentQty = 0;
     let currentPrincipal = 0;
@@ -34,11 +47,12 @@ function recalculateAsset(assetId) {
         }
     }
 
-    db.prepare(`
-        UPDATE assets 
-        SET quantity = ?, avgPrice = ?, principal = ?, updatedAt = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `).run(currentQty, currentAvgPrice, currentPrincipal, assetId);
+    await updateDoc(assetRef, {
+        quantity: currentQty,
+        avgPrice: currentAvgPrice,
+        principal: currentPrincipal,
+        updatedAt: serverTimestamp()
+    });
 }
 
 export async function DELETE(request, { params }) {
@@ -46,18 +60,14 @@ export async function DELETE(request, { params }) {
         const { id } = await params;
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 
-        const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id);
-        if (!tx) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+        const txRef = doc(db, 'transactions', id);
+        const txSnap = await getDoc(txRef);
+        if (!txSnap.exists()) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
-        const assetId = tx.asset_id;
+        const assetId = txSnap.data().asset_id;
 
-        // Execute inside a transaction
-        const deleteTx = db.transaction(() => {
-            db.prepare('DELETE FROM transactions WHERE id = ?').run(id);
-            recalculateAsset(assetId);
-        });
-
-        deleteTx();
+        await deleteDoc(txRef);
+        await recalculateAsset(assetId);
 
         return NextResponse.json({ success: true }, { status: 200 });
     } catch (error) {
@@ -74,50 +84,64 @@ export async function PUT(request, { params }) {
         const body = await request.json();
         const { date, quantity, price, action, type, region, symbol, name } = body;
 
-        const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id);
-        if (!tx) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+        const txRef = doc(db, 'transactions', id);
+        const txSnap = await getDoc(txRef);
+        if (!txSnap.exists()) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
+        const tx = txSnap.data();
         const oldAssetId = tx.asset_id;
         let newAssetId = oldAssetId;
 
-        const updateTx = db.transaction(() => {
-            const querySymbol = symbol || '';
-            const queryRegion = region || 'KR';
+        const querySymbol = symbol || '';
+        const queryRegion = region || 'KR';
 
-            if (type && name) {
-                const oldAsset = db.prepare('SELECT * FROM assets WHERE id = ?').get(oldAssetId);
+        if (type && name) {
+            const oldAssetRef = doc(db, 'assets', oldAssetId);
+            const oldAssetSnap = await getDoc(oldAssetRef);
+            const oldAsset = oldAssetSnap.data();
 
-                if (oldAsset.type !== type || oldAsset.region !== queryRegion || oldAsset.symbol !== querySymbol || oldAsset.name !== name) {
-                    let targetAsset = db.prepare('SELECT * FROM assets WHERE type = ? AND region = ? AND symbol = ? AND name = ?').get(type, queryRegion, querySymbol, name);
-                    if (!targetAsset) {
-                        const info = db.prepare(`
-                            INSERT INTO assets (type, region, symbol, name, quantity, avgPrice, principal)
-                            VALUES (?, ?, ?, ?, 0, 0, 0)
-                        `).run(type, queryRegion, querySymbol, name);
-                        newAssetId = info.lastInsertRowid;
-                    } else {
-                        newAssetId = targetAsset.id;
-                    }
+            if (oldAsset && (oldAsset.type !== type || oldAsset.region !== queryRegion || oldAsset.symbol !== querySymbol || oldAsset.name !== name)) {
+
+                const assetsRef = collection(db, 'assets');
+                const targetQ = query(assetsRef, where('type', '==', type), where('region', '==', queryRegion), where('symbol', '==', querySymbol), where('name', '==', name));
+                const targetSnap = await getDocs(targetQ);
+
+                if (targetSnap.empty) {
+                    const newAssetRef = doc(collection(db, 'assets'));
+                    await setDoc(newAssetRef, {
+                        type,
+                        region: queryRegion,
+                        symbol: querySymbol,
+                        name,
+                        quantity: 0,
+                        avgPrice: 0,
+                        principal: 0,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
+                    newAssetId = newAssetRef.id;
+                } else {
+                    newAssetId = targetSnap.docs[0].id;
                 }
             }
+        }
 
-            const resolvedPrice = (type === 'cash' && queryRegion === 'US' && !price) ? 1 : (price || tx.price);
+        const resolvedPrice = (type === 'cash' && queryRegion === 'US' && !price) ? 1 : (price || tx.price);
 
-            db.prepare(`
-                UPDATE transactions 
-                SET date = ?, quantity = ?, price = ?, action = ?, asset_id = ?
-                WHERE id = ?
-            `).run(date || tx.date, quantity || tx.quantity, resolvedPrice, action || tx.action, newAssetId, id);
-
-            if (oldAssetId !== newAssetId) {
-                recalculateAsset(oldAssetId);
-                recalculateAsset(newAssetId);
-            } else {
-                recalculateAsset(oldAssetId);
-            }
+        await updateDoc(txRef, {
+            date: date || tx.date,
+            quantity: quantity || tx.quantity,
+            price: resolvedPrice,
+            action: action || tx.action,
+            asset_id: newAssetId
         });
 
-        updateTx();
+        if (oldAssetId !== newAssetId) {
+            await recalculateAsset(oldAssetId);
+            await recalculateAsset(newAssetId);
+        } else {
+            await recalculateAsset(oldAssetId);
+        }
 
         return NextResponse.json({ success: true }, { status: 200 });
     } catch (error) {

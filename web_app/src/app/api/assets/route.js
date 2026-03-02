@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
 import { default as YahooFinance } from 'yahoo-finance2';
 
 export async function GET() {
     try {
-        const assets = db.prepare('SELECT * FROM assets').all();
+        const assetsRef = collection(db, 'assets');
+        const snapshot = await getDocs(assetsRef);
+        const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         // Enrich stock assets with current prices
         const enrichedAssets = await Promise.all(assets.map(async (asset) => {
@@ -103,11 +106,19 @@ export async function POST(request) {
         const qty = parseFloat(quantity);
         const prc = parseFloat(price);
 
-        let asset = db.prepare('SELECT * FROM assets WHERE type = ? AND region = ? AND symbol = ? AND name = ?').get(type, region || 'KR', symbol || '', name);
+        const assetsRef = collection(db, 'assets');
+        const q = query(assetsRef, where('type', '==', type), where('region', '==', region || 'KR'), where('symbol', '==', symbol || ''), where('name', '==', name));
+        const snapshot = await getDocs(q);
+
+        let asset = null;
+        if (!snapshot.empty) {
+            asset = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+        }
 
         let newQty = qty;
         let newPrincipal = qty * prc;
         let newAvgPrice = prc;
+        let assetId = asset ? asset.id : null;
 
         if (asset) {
             if (action === 'buy') {
@@ -123,29 +134,43 @@ export async function POST(request) {
                 newAvgPrice = asset.avgPrice; // Avg price doesn't change on sell
             }
 
-            db.prepare(`
-        UPDATE assets 
-        SET quantity = ?, avgPrice = ?, principal = ?, updatedAt = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(newQty, newAvgPrice, newPrincipal, asset.id);
+            const assetDoc = doc(db, 'assets', asset.id);
+            await updateDoc(assetDoc, {
+                quantity: newQty,
+                avgPrice: newAvgPrice,
+                principal: newPrincipal,
+                updatedAt: serverTimestamp()
+            });
         } else {
             if (action === 'sell') {
                 return NextResponse.json({ error: 'Cannot sell asset not owned' }, { status: 400 });
             }
-            const info = db.prepare(`
-        INSERT INTO assets (type, region, symbol, name, quantity, avgPrice, principal)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(type, region || 'KR', symbol || '', name, newQty, newAvgPrice, newPrincipal);
-            asset = { id: info.lastInsertRowid };
+            const newDocRef = await addDoc(assetsRef, {
+                type,
+                region: region || 'KR',
+                symbol: symbol || '',
+                name,
+                quantity: newQty,
+                avgPrice: newAvgPrice,
+                principal: newPrincipal,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            assetId = newDocRef.id;
         }
 
         // Insert transaction record
-        db.prepare(`
-      INSERT INTO transactions (asset_id, action, date, quantity, price)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(asset.id, action, date, qty, prc);
+        const trxRef = collection(db, 'transactions');
+        await addDoc(trxRef, {
+            asset_id: assetId,
+            action,
+            date,
+            quantity: qty,
+            price: prc,
+            createdAt: serverTimestamp()
+        });
 
-        return NextResponse.json({ success: true, id: asset.id }, { status: 201 });
+        return NextResponse.json({ success: true, id: assetId }, { status: 201 });
     } catch (error) {
         console.error('Error handling asset POST:', error);
         return NextResponse.json({ error: 'Failed to process transaction' }, { status: 500 });

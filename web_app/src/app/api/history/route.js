@@ -1,21 +1,38 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore/lite';
 
 export async function GET() {
     try {
-        // Fetch all transactions with asset type
-        const txs = db.prepare(`
-            SELECT t.date, t.action, t.quantity, t.price, a.type 
-            FROM transactions t
-            JOIN assets a ON t.asset_id = a.id
-            ORDER BY t.date ASC
-        `).all();
+        const [assetsSnap, txsSnap] = await Promise.all([
+            getDocs(collection(db, 'assets')),
+            getDocs(collection(db, 'transactions'))
+        ]);
+
+        const assetsMap = {};
+        assetsSnap.forEach(doc => {
+            assetsMap[doc.id] = doc.data();
+        });
+
+        const txs = txsSnap.docs.map(doc => {
+            const data = doc.data();
+            const assetType = assetsMap[data.asset_id]?.type || 'unknown';
+            return {
+                date: data.date,
+                action: data.action,
+                quantity: data.quantity,
+                price: data.price,
+                type: assetType
+            };
+        });
+
+        // sort ascending by date
+        txs.sort((a, b) => new Date(a.date) - new Date(b.date));
 
         if (txs.length === 0) {
             return NextResponse.json([]);
         }
 
-        // Determine date range (from earliest tx to current month)
         const firstTxDate = new Date(txs[0].date);
         const currentDate = new Date();
 
@@ -26,7 +43,6 @@ export async function GET() {
 
         const historyData = [];
 
-        // Running totals
         const balances = {
             stock: 0,
             pension: 0,
@@ -38,20 +54,17 @@ export async function GET() {
 
         while (startYear < endYear || (startYear === endYear && startMonth <= endMonth)) {
             const currentMonthStr = `${startYear}-${String(startMonth).padStart(2, '0')}`;
-            // End of the current iterative month
             const nextMonthYear = startMonth === 12 ? startYear + 1 : startYear;
             const nextMonth = startMonth === 12 ? 1 : startMonth + 1;
-            // The string to compare dates against (all txs before the 1st of next month)
             const cutoffDateStr = `${nextMonthYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
-            // Process all transactions up to the end of this month
             while (txIndex < txs.length && txs[txIndex].date < cutoffDateStr) {
                 const tx = txs[txIndex];
                 const value = tx.quantity * tx.price;
                 if (tx.action === 'buy') {
-                    balances[tx.type] += value;
+                    balances[tx.type] = (balances[tx.type] || 0) + value;
                 } else if (tx.action === 'sell') {
-                    balances[tx.type] -= value;
+                    balances[tx.type] = (balances[tx.type] || 0) - value;
                 }
                 txIndex++;
             }
@@ -62,7 +75,7 @@ export async function GET() {
                 cashValue: balances.cash > 0 ? balances.cash : 0,
                 pensionValue: balances.pension > 0 ? balances.pension : 0,
                 realEstateValue: balances.real_estate > 0 ? balances.real_estate : 0,
-                totalValue: Math.max(0, balances.stock) + Math.max(0, balances.cash) + Math.max(0, balances.pension) + Math.max(0, balances.real_estate)
+                totalValue: Math.max(0, balances.stock || 0) + Math.max(0, balances.cash || 0) + Math.max(0, balances.pension || 0) + Math.max(0, balances.real_estate || 0)
             });
 
             startMonth++;
@@ -78,4 +91,3 @@ export async function GET() {
         return NextResponse.json({ error: 'Failed to calculate history' }, { status: 500 });
     }
 }
-
