@@ -32,7 +32,7 @@ export default function Dashboard() {
     fetchRate();
   }, [fetchAssets, fetchHistory]);
 
-  const summary = getSummary();
+  const summary = getSummary(currentExchangeRate);
   const formatCurrency = (val, region = 'KR') => {
     if (region === 'US') {
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
