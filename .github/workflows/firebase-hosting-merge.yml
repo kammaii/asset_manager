@@ -20,5 +20,3 @@ jobs:
           channelId: live
           projectId: asset-master-jwpark
           entryPoint: ./web_app
-        env:
-          FIREBASE_CLI_EXPERIMENTS: webframeworks
