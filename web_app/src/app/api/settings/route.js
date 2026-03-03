@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore/lite';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     try {
         const docRef = doc(db, 'settings', 'general');

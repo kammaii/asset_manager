@@ -3,12 +3,15 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore/lite';
 import { default as YahooFinance } from 'yahoo-finance2';
 
+export const dynamic = 'force-dynamic'; // Prevent Next.js from caching API routes
+
 export async function GET(request) {
     try {
         const url = new URL(request.url);
         const type = url.searchParams.get('type') || 'monthly';
 
-        const currentDate = new Date();
+        // Use Korean timezone (Asia/Seoul)
+        const currentDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
         const currentDay = currentDate.getDate();

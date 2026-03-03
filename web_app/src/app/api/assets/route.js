@@ -3,6 +3,8 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
 import { default as YahooFinance } from 'yahoo-finance2';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     try {
         const assetsRef = collection(db, 'assets');
