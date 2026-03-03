@@ -20,6 +20,7 @@ export default function EntryPage() {
         action: 'buy',
         date: new Date().toISOString().split('T')[0],
         region: 'KR',
+        investmentCountry: 'KR',
         account: '일반',
         symbol: '',
         name: '',
@@ -109,6 +110,7 @@ export default function EntryPage() {
             action: trx.action,
             date: trx.date,
             region: trx.region || 'KR',
+            investmentCountry: trx.investmentCountry || trx.region || 'KR',
             account: trx.account || '일반',
             symbol: trx.symbol || '',
             name: trx.name || '',
@@ -131,6 +133,7 @@ export default function EntryPage() {
             action: trx.action || 'buy',
             date: trx.date,
             region: asset.region || 'KR',
+            investmentCountry: asset.investmentCountry || asset.region || 'KR',
             account: asset.account || '일반',
             symbol: asset.symbol || '',
             name: asset.name || '',
@@ -145,7 +148,7 @@ export default function EntryPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -192,6 +195,7 @@ export default function EntryPage() {
                 const updatePayload = {
                     type: activeTab,
                     region: formData.region,
+                    investmentCountry: activeTab === 'stock' || activeTab === 'pension' ? formData.investmentCountry : formData.region,
                     account: formData.account || '일반',
                     symbol: formData.symbol.toUpperCase(),
                     name: formData.name,
@@ -229,6 +233,7 @@ export default function EntryPage() {
                     action: action,
                     date: formData.date,
                     region: formData.region,
+                    investmentCountry: formData.region,
                     symbol: formData.symbol || formData.name, // Use name as symbol
                     name: formData.name,
                     quantity: transactionQuantity,
@@ -242,6 +247,7 @@ export default function EntryPage() {
                     action: 'buy', // default to buy for real estate addition
                     date: formData.date,
                     region: formData.region || 'KR',
+                    investmentCountry: formData.region || 'KR',
                     account: formData.account || '일반',
                     symbol: '',
                     name: formData.name,
@@ -258,6 +264,7 @@ export default function EntryPage() {
                     action: formData.action,
                     date: formData.date,
                     region: formData.region,
+                    investmentCountry: activeTab === 'stock' || activeTab === 'pension' ? formData.investmentCountry : formData.region,
                     account: formData.account || '일반',
                     symbol: formData.symbol.toUpperCase(),
                     name: formData.name,
@@ -291,7 +298,7 @@ export default function EntryPage() {
                         <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-[#0d7ff2]">
                             <Wallet size={20} />
                         </div>
-                        <h2 className="text-lg font-bold leading-tight tracking-tight">Asset Master</h2>
+                        <h2 className="text-lg font-bold leading-tight tracking-tight">Asset Manager</h2>
                     </div>
                     <nav className="hidden md:flex items-center gap-6">
                         <Link href="/" className="text-slate-500 text-sm font-medium hover:text-[#0d7ff2] transition-colors">대시보드</Link>
@@ -485,15 +492,27 @@ export default function EntryPage() {
                                             </div>
                                         )}
                                     </div>
-                                    {(activeTab === 'stock' || activeTab === 'cash') && (
-                                        <div className="flex flex-col gap-1 min-w-[100px]">
-                                            <label className="text-xs font-semibold text-slate-500">통화/국가</label>
-                                            <select name="region" value={formData.region} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm bg-slate-50">
-                                                <option value="KR">한국 (원화)</option>
-                                                <option value="US">미국 (달러)</option>
-                                            </select>
-                                        </div>
-                                    )}
+                                    <div className="flex flex-col md:flex-row gap-3">
+                                        {(activeTab === 'stock' || activeTab === 'cash') && (
+                                            <div className="flex flex-col gap-1 min-w-[100px]">
+                                                <label className="text-xs font-semibold text-slate-500">결제 통화</label>
+                                                <select name="region" value={formData.region} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm bg-slate-50">
+                                                    <option value="KR">KRW (원화)</option>
+                                                    <option value="US">USD (달러)</option>
+                                                </select>
+                                            </div>
+                                        )}
+                                        {/* New 투자 국가 (Investment Country) selection for stock & pension */}
+                                        {(activeTab === 'stock' || activeTab === 'pension') && (
+                                            <div className="flex flex-col gap-1 min-w-[100px]">
+                                                <label className="text-xs font-semibold text-slate-500">투자 국가</label>
+                                                <select name="investmentCountry" value={formData.investmentCountry || formData.region} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm bg-slate-50">
+                                                    <option value="KR">한국 (KR)</option>
+                                                    <option value="US">미국 (US)</option>
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="flex flex-col gap-1 min-w-[120px]">
                                         <label className="text-xs font-semibold text-slate-500">종목코드 (심볼)</label>
                                         <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder={activeTab === 'cash' ? "Ex: NH" : "Ex: 005930"} className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
@@ -669,7 +688,15 @@ export default function EntryPage() {
                                                         // Original Table Row Rendering
                                                         <>
                                                             <td className="px-4 py-3 font-bold text-center text-slate-700 bg-slate-50/50">
-                                                                {trx.region === 'US' ? '🇺🇸' : trx.region === 'KR' ? '🇰🇷' : '-'}
+                                                                {(() => {
+                                                                    const invCountry = trx.investmentCountry || trx.region;
+                                                                    const isUSInvest = invCountry === 'US';
+                                                                    const isKRW = trx.region === 'KR';
+                                                                    if (isUSInvest && isKRW) return '🇺🇸(KRW)';
+                                                                    if (isUSInvest && !isKRW) return '🇺🇸(USD)';
+                                                                    if (!isUSInvest && isKRW) return '🇰🇷(KRW)';
+                                                                    return trx.region === 'US' ? '🇺🇸' : trx.region === 'KR' ? '🇰🇷' : '-';
+                                                                })()}
                                                             </td>
                                                             <td className="px-4 py-3 text-slate-700 font-medium">
                                                                 {trx.account || '일반'}

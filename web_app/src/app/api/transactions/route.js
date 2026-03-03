@@ -36,6 +36,7 @@ export async function GET() {
         createdAt: createdAt,
         type: asset.type,
         region: asset.region,
+        investmentCountry: asset.investmentCountry || asset.region || 'KR',
         symbol: asset.symbol,
         name: asset.name,
         asset_id: data.asset_id

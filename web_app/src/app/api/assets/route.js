@@ -69,7 +69,8 @@ export async function GET() {
                     previousClose,
                     netInvestment,
                     expense,
-                    deposit
+                    deposit,
+                    investmentCountry: asset.investmentCountry || asset.region || 'KR'
                 };
             } else if (asset.type === 'cash') {
                 if (asset.region === 'US') {
@@ -107,7 +108,8 @@ export async function GET() {
                 profitGain,
                 profitRate,
                 dayChange,
-                previousClose
+                previousClose,
+                investmentCountry: asset.investmentCountry || asset.region || 'KR'
             };
         }));
 
@@ -121,7 +123,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, investmentCountry } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -131,7 +133,18 @@ export async function POST(request) {
         const prc = parseFloat(price);
 
         const assetsRef = collection(db, 'assets');
-        const q = query(assetsRef, where('type', '==', type), where('region', '==', region || 'KR'), where('symbol', '==', symbol || ''), where('name', '==', name), where('account', '==', account || '일반'));
+        // Allow multiple items with the same region, symbol, name, and account, but different investmentCountry to be technically separate if necessary, but actually let's not break query.
+        const queryConstraints = [
+            where('type', '==', type),
+            where('region', '==', region || 'KR'),
+            where('symbol', '==', symbol || ''),
+            where('name', '==', name),
+            where('account', '==', account || '일반')
+        ];
+        if (investmentCountry) {
+            queryConstraints.push(where('investmentCountry', '==', investmentCountry));
+        }
+        const q = query(assetsRef, ...queryConstraints);
         const snapshot = await getDocs(q);
 
         let asset = null;
@@ -165,6 +178,7 @@ export async function POST(request) {
                 principal: newPrincipal,
                 updatedAt: serverTimestamp()
             };
+            if (investmentCountry !== undefined) updateData.investmentCountry = investmentCountry;
             if (type === 'real_estate') {
                 if (expense !== undefined) updateData.expense = parseFloat(expense) || 0;
                 if (deposit !== undefined) updateData.deposit = parseFloat(deposit) || 0;
@@ -178,6 +192,7 @@ export async function POST(request) {
             const newAssetData = {
                 type,
                 region: region || 'KR',
+                investmentCountry: investmentCountry || region || 'KR',
                 account: account || '일반',
                 symbol: symbol || '',
                 name,
@@ -204,6 +219,8 @@ export async function POST(request) {
             date,
             quantity: qty,
             price: prc,
+            region: region || 'KR',
+            investmentCountry: investmentCountry || region || 'KR',
             createdAt: serverTimestamp()
         });
 

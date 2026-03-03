@@ -3,6 +3,7 @@ import { create } from 'zustand';
 const useAssetStore = create((set, get) => ({
     assets: [],
     history: [],
+    dailyHistory: [],
     transactions: [],
     accountTypes: [],
     cashInstitutions: [],
@@ -107,10 +108,16 @@ const useAssetStore = create((set, get) => ({
 
     fetchHistory: async () => {
         try {
-            const res = await fetch('/api/history');
-            if (!res.ok) throw new Error('Failed to fetch history');
-            const data = await res.json();
-            set({ history: data });
+            const [monthlyRes, dailyRes] = await Promise.all([
+                fetch('/api/history?type=monthly'),
+                fetch('/api/history?type=daily')
+            ]);
+            let historyData = [];
+            let dailyHistoryData = [];
+            if (monthlyRes.ok) historyData = await monthlyRes.json();
+            if (dailyRes.ok) dailyHistoryData = await dailyRes.json();
+
+            set({ history: historyData, dailyHistory: dailyHistoryData });
         } catch (error) {
             console.error(error);
         }

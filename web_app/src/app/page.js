@@ -14,8 +14,8 @@ const ASSET_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, fetchHistory, loading, getSummary } = useAssetStore();
-  const [filter, setFilter] = useState('1Y');
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary } = useAssetStore();
+  const [filter, setFilter] = useState('MONTHLY');
   const [includeStock, setIncludeStock] = useState(true);
   const [includeCash, setIncludeCash] = useState(true);
   const [includeRealEstate, setIncludeRealEstate] = useState(false);
@@ -73,14 +73,30 @@ export default function Dashboard() {
     includePension && { name: '연금', value: summary.totalPension },
   ].filter(Boolean).filter(item => item.value > 0);
 
-  const chartHistory = history.length > 0 ? history : [
-    { month: '2025-01', totalValue: 4000000 },
-    { month: '2025-02', totalValue: 4500000 },
-    { month: '2025-03', totalValue: 5200000 },
-    { month: '2025-04', totalValue: 4800000 },
-    { month: '2025-05', totalValue: 6100000 },
-    { month: '2025-06', totalValue: summary.totalAssets || 6500000 },
-  ];
+  let chartHistory = [];
+  if (filter === 'DAILY') {
+    chartHistory = dailyHistory?.length > 0 ? dailyHistory.slice(-30).map(d => ({
+      ...d,
+      displayLabel: d.date ? d.date.substring(5) : '', // MM-DD
+    })) : [];
+  } else if (filter === 'MONTHLY') {
+    chartHistory = history?.length > 0 ? history.slice(-12).map(m => ({
+      ...m,
+      displayLabel: m.month ? `${m.month.split('-')[0].slice(2)}.${m.month.split('-')[1]}` : '', // YY.MM
+    })) : [];
+  } else {
+    chartHistory = history?.length > 0 ? history.map(m => ({
+      ...m,
+      displayLabel: m.month ? `${m.month.split('-')[0].slice(2)}.${m.month.split('-')[1]}` : '', // YY.MM
+    })) : [];
+  }
+
+  // Fallback
+  if (chartHistory.length === 0) {
+    chartHistory = [
+      { displayLabel: '01.01', totalValue: summary.totalAssets || 0 }
+    ];
+  }
 
   return (
     <div className="bg-[#f5f7f8] font-sans text-slate-900 min-h-screen flex flex-col overflow-x-hidden">
@@ -113,16 +129,22 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
             <button
-              onClick={() => setFilter('1Y')}
-              className={`px-3 py-1.5 rounded text-xs transition-all ${filter === '1Y' ? 'bg-white shadow-sm font-semibold text-slate-900' : 'hover:bg-slate-200 font-medium text-slate-500'}`}
+              onClick={() => setFilter('DAILY')}
+              className={`px-3 py-1.5 rounded text-xs transition-all ${filter === 'DAILY' ? 'bg-white shadow-sm font-semibold text-slate-900' : 'hover:bg-slate-200 font-medium text-slate-500'}`}
             >
-              Last 1 Year
+              일별 (최근 1달)
+            </button>
+            <button
+              onClick={() => setFilter('MONTHLY')}
+              className={`px-3 py-1.5 rounded text-xs transition-all ${filter === 'MONTHLY' ? 'bg-white shadow-sm font-semibold text-slate-900' : 'hover:bg-slate-200 font-medium text-slate-500'}`}
+            >
+              월별 (1년)
             </button>
             <button
               onClick={() => setFilter('ALL')}
               className={`px-3 py-1.5 rounded text-xs transition-all ${filter === 'ALL' ? 'bg-white shadow-sm font-semibold text-slate-900' : 'hover:bg-slate-200 font-medium text-slate-500'}`}
             >
-              All Time
+              전체
             </button>
           </div>
         </div>
@@ -285,7 +307,7 @@ export default function Dashboard() {
           {/* Monthly Asset Trend */}
           <div className="lg:col-span-2 rounded-xl bg-white border border-slate-200 p-6 flex flex-col">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-bold text-slate-900">월별 자산 변동 추이</h3>
+              <h3 className="text-lg font-bold text-slate-900">자산 변동 추이</h3>
             </div>
             <div className="mb-4">
               <span className="text-3xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalAssets)}</span>
@@ -294,13 +316,14 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                  <XAxis dataKey="displayLabel" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => `${value / 10000}만`} />
                   <Tooltip
-                    formatter={(value, name) => [
+                    formatter={(value) => [
                       formatCurrency(value),
-                      name
+                      '총합계'
                     ]}
+                    labelFormatter={(label) => `시점: ${label}`}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Legend
@@ -420,7 +443,7 @@ export default function Dashboard() {
                               <td className="p-4">
                                 <div className="flex flex-col">
                                   <span className="font-bold text-slate-900">
-                                    {asset.region === 'US' ? '🇺🇸 ' : asset.region === 'KR' ? '🇰🇷 ' : ''}{asset.name}
+                                    {asset.investmentCountry === 'US' || (!asset.investmentCountry && asset.region === 'US') ? '🇺🇸 ' : asset.investmentCountry === 'KR' || (!asset.investmentCountry && asset.region === 'KR') ? '🇰🇷 ' : ''}{asset.name}
                                   </span>
                                   <span className="text-xs text-slate-500">{asset.symbol || '-'}</span>
                                 </div>

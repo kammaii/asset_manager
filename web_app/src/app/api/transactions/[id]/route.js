@@ -82,7 +82,7 @@ export async function PUT(request, { params }) {
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 
         const body = await request.json();
-        const { date, quantity, price, action, type, region, symbol, name, account, expense, deposit, realEstateCurrentPrice } = body;
+        const { date, quantity, price, action, type, region, symbol, name, account, expense, deposit, realEstateCurrentPrice, investmentCountry } = body;
 
         const txRef = doc(db, 'transactions', id);
         const txSnap = await getDoc(txRef);
@@ -94,16 +94,26 @@ export async function PUT(request, { params }) {
 
         const querySymbol = symbol || '';
         const queryRegion = region || 'KR';
+        const queryInvestmentCountry = investmentCountry || region || 'KR';
 
         if (type && name) {
             const oldAssetRef = doc(db, 'assets', oldAssetId);
             const oldAssetSnap = await getDoc(oldAssetRef);
             const oldAsset = oldAssetSnap.data();
 
-            if (oldAsset && (oldAsset.type !== type || oldAsset.region !== queryRegion || oldAsset.symbol !== querySymbol || oldAsset.name !== name || oldAsset.account !== (account || '일반'))) {
+            if (oldAsset && (oldAsset.type !== type || oldAsset.region !== queryRegion || oldAsset.symbol !== querySymbol || oldAsset.name !== name || oldAsset.account !== (account || '일반') || oldAsset.investmentCountry !== queryInvestmentCountry)) {
 
                 const assetsRef = collection(db, 'assets');
-                const targetQ = query(assetsRef, where('type', '==', type), where('region', '==', queryRegion), where('symbol', '==', querySymbol), where('name', '==', name), where('account', '==', account || '일반'));
+                const queryConstraints = [
+                    where('type', '==', type),
+                    where('region', '==', queryRegion),
+                    where('symbol', '==', querySymbol),
+                    where('name', '==', name),
+                    where('account', '==', account || '일반')
+                ];
+                if (investmentCountry) queryConstraints.push(where('investmentCountry', '==', queryInvestmentCountry));
+
+                const targetQ = query(assetsRef, ...queryConstraints);
                 const targetSnap = await getDocs(targetQ);
 
                 if (targetSnap.empty) {
@@ -111,6 +121,7 @@ export async function PUT(request, { params }) {
                     await setDoc(newAssetRef, {
                         type,
                         region: queryRegion,
+                        investmentCountry: queryInvestmentCountry,
                         account: account || '일반',
                         symbol: querySymbol,
                         name,
@@ -134,7 +145,9 @@ export async function PUT(request, { params }) {
             quantity: quantity || tx.quantity,
             price: resolvedPrice,
             action: action || tx.action,
-            asset_id: newAssetId
+            asset_id: newAssetId,
+            region: queryRegion,
+            investmentCountry: queryInvestmentCountry
         });
 
         if (oldAssetId !== newAssetId) {
