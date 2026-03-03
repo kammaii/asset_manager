@@ -1,0 +1,40 @@
+[debug] [2026-03-03T07:45:44.964Z] ----------------------------------------------------------------------
+[debug] [2026-03-03T07:45:44.967Z] Command:       /Users/jwpark/.nvm/versions/node/v25.6.1/bin/node /Users/jwpark/.nvm/versions/node/v25.6.1/bin/firebase init hosting
+[debug] [2026-03-03T07:45:44.967Z] CLI Version:   15.8.0
+[debug] [2026-03-03T07:45:44.967Z] Platform:      darwin
+[debug] [2026-03-03T07:45:44.967Z] Node Version:  v25.6.1
+[debug] [2026-03-03T07:45:44.967Z] Time:          Tue Mar 03 2026 14:45:44 GMT+0700 (Indochina Time)
+[debug] [2026-03-03T07:45:44.967Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  /Users/jwpark/dev/asset_manager
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-03-03T07:45:45.492Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-03T07:45:45.492Z] > authorizing via signed-in user (akorean.jwp@gmail.com)
+[debug] [2026-03-03T07:45:45.493Z] Checked if tokens are valid: true, expires at: 1772526497942
+[debug] [2026-03-03T07:45:45.493Z] Checked if tokens are valid: true, expires at: 1772526497942
+[debug] [2026-03-03T07:45:45.493Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/asset-master-jwpark [none]
+[debug] [2026-03-03T07:45:46.191Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/asset-master-jwpark 200
+[debug] [2026-03-03T07:45:46.191Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/asset-master-jwpark {"projectId":"asset-master-jwpark","projectNumber":"815700546936","displayName":"Asset Manager App","name":"projects/asset-master-jwpark","resources":{"hostingSite":"asset-master-jwpark"},"state":"ACTIVE","etag":"1_6b55117f-f1e6-4ccc-a84e-0872f51531d1"}
+[info] i  Using project asset-master-jwpark (Asset Manager App) . 
+[info] 
+=== Hosting Setup
+[debug] [2026-03-03T07:45:46.203Z] Checked if tokens are valid: true, expires at: 1772526497942
+[debug] [2026-03-03T07:45:46.203Z] Checked if tokens are valid: true, expires at: 1772526497942
+[debug] [2026-03-03T07:45:46.203Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/asset-master-jwpark [none]
+[debug] [2026-03-03T07:45:46.595Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/asset-master-jwpark 200
+[debug] [2026-03-03T07:45:46.595Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/asset-master-jwpark {"projectId":"asset-master-jwpark","projectNumber":"815700546936","displayName":"Asset Manager App","name":"projects/asset-master-jwpark","resources":{"hostingSite":"asset-master-jwpark"},"state":"ACTIVE","etag":"1_6b55117f-f1e6-4ccc-a84e-0872f51531d1"}
