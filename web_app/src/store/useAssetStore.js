@@ -168,41 +168,41 @@ const useAssetStore = create((set, get) => ({
     getSummary: (exchangeRate = 1400) => {
         const { assets } = get();
 
-        const convert = (val, region) => (region === 'US' ? (val || 0) * exchangeRate : (val || 0));
+        const convert = (val, asset) => (asset.region === 'US' && asset.type !== 'cash' ? (val || 0) * exchangeRate : (val || 0));
 
         // overall
-        const totalAssets = assets.reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
-        const totalPrincipal = assets.reduce((sum, a) => sum + convert(a.netInvestment !== undefined ? a.netInvestment : a.principal, a.region), 0);
-        const totalProfit = assets.reduce((sum, a) => sum + convert(a.profitGain, a.region), 0);
+        const totalAssets = assets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+        const totalPrincipal = assets.reduce((sum, a) => sum + convert(a.netInvestment !== undefined ? a.netInvestment : a.principal, a), 0);
+        const totalProfit = assets.reduce((sum, a) => sum + convert(a.profitGain, a), 0);
         const profitRate = totalPrincipal > 0 ? (totalProfit / totalPrincipal) * 100 : 0;
-        const dayChange = assets.reduce((sum, a) => sum + convert(a.dayChange, a.region), 0);
+        const dayChange = assets.reduce((sum, a) => sum + convert(a.dayChange, a), 0);
 
         // stock
         const stockAssets = assets.filter(a => a.type === 'stock');
-        const totalStock = stockAssets.reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
-        const stockPrincipal = stockAssets.reduce((sum, a) => sum + convert(a.principal, a.region), 0);
+        const totalStock = stockAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+        const stockPrincipal = stockAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
         const stockProfit = totalStock - stockPrincipal;
         const stockRate = stockPrincipal > 0 ? (stockProfit / stockPrincipal) * 100 : 0;
 
         // pension
         const pensionAssets = assets.filter(a => a.type === 'pension');
-        const totalPension = pensionAssets.reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
-        const pensionPrincipal = pensionAssets.reduce((sum, a) => sum + convert(a.principal, a.region), 0);
+        const totalPension = pensionAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+        const pensionPrincipal = pensionAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
         const pensionProfit = totalPension - pensionPrincipal;
         const pensionRate = pensionPrincipal > 0 ? (pensionProfit / pensionPrincipal) * 100 : 0;
 
         // cash
         const cashAssets = assets.filter(a => a.type === 'cash');
-        const totalCash = cashAssets.reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
-        const cashPrincipal = cashAssets.reduce((sum, a) => sum + convert(a.principal, a.region), 0);
+        const totalCash = cashAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+        const cashPrincipal = cashAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
         const cashProfit = totalCash - cashPrincipal;
         const cashRate = cashPrincipal > 0 ? (cashProfit / cashPrincipal) * 100 : 0;
 
         // real_estate
         const realEstateAssets = assets.filter(a => a.type === 'real_estate');
-        const totalRealEstate = realEstateAssets.reduce((sum, a) => sum + convert((a.netInvestment || 0) + (a.profitGain || 0), a.region), 0);
-        const realEstatePrincipal = realEstateAssets.reduce((sum, a) => sum + convert(a.netInvestment || 0, a.region), 0);
-        const realEstateProfit = realEstateAssets.reduce((sum, a) => sum + convert(a.profitGain || 0, a.region), 0);
+        const totalRealEstate = realEstateAssets.reduce((sum, a) => sum + convert((a.netInvestment || 0) + (a.profitGain || 0), a), 0);
+        const realEstatePrincipal = realEstateAssets.reduce((sum, a) => sum + convert(a.netInvestment || 0, a), 0);
+        const realEstateProfit = realEstateAssets.reduce((sum, a) => sum + convert(a.profitGain || 0, a), 0);
         const realEstateRate = realEstatePrincipal > 0 ? (realEstateProfit / realEstatePrincipal) * 100 : 0;
 
         return {

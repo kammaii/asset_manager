@@ -49,7 +49,35 @@ export default function EntryPage() {
             }
         };
         fetchRate();
+
+        // Initial tab check
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (tabParam && ['stock', 'pension', 'cash', 'real_estate'].includes(tabParam)) {
+                setActiveTab(tabParam);
+            }
+        }
     }, [fetchAssets, fetchTransactions]);
+
+    // Reset form when tab changes
+    useEffect(() => {
+        setFormData({
+            action: 'buy',
+            date: new Date().toISOString().split('T')[0],
+            region: 'KR',
+            investmentCountry: 'KR',
+            account: '일반',
+            symbol: '',
+            name: '',
+            quantity: '',
+            price: '',
+            expense: '',
+            deposit: '',
+            realEstateCurrentPrice: ''
+        });
+        setEditingId(null);
+    }, [activeTab]);
 
     const addInstitution = async () => {
         if (newInstitution.trim() && !cashInstitutions.includes(newInstitution.trim())) {
@@ -306,12 +334,6 @@ export default function EntryPage() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
-                    <label className="hidden sm:flex flex-col min-w-40 h-9 max-w-64 relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <Search size={18} />
-                        </div>
-                        <input className="block w-full h-full rounded-full bg-slate-100 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#0d7ff2]" placeholder="Search assets..." />
-                    </label>
                 </div>
             </header>
 

@@ -4,13 +4,20 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import useAssetStore from '@/store/useAssetStore';
 import { BarChart, Bar, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal, ArrowLeft } from 'lucide-react';
 
 const ASSET_COLORS = {
   '주식': '#3b82f6',
   '현금': '#22c55e',
   '부동산': '#facc15',
   '연금': '#a855f7'
+};
+
+const DRILLDOWN_COLORS = {
+  '한국': '#ef4444',
+  '미국': '#3b82f6',
+  '원화 (KRW)': '#22c55e',
+  '달러 (USD)': '#f59e0b'
 };
 
 export default function Dashboard() {
@@ -21,6 +28,7 @@ export default function Dashboard() {
   const [includeRealEstate, setIncludeRealEstate] = useState(false);
   const [includePension, setIncludePension] = useState(false);
   const [currentExchangeRate, setCurrentExchangeRate] = useState(1400); // Default fallback
+  const [drillDownCategory, setDrillDownCategory] = useState(null);
 
   useEffect(() => {
     fetchAssets();
@@ -66,12 +74,43 @@ export default function Dashboard() {
   const displayProfitRate = displayTotalPrincipal > 0 ? (displayTotalProfit / displayTotalPrincipal) * 100 : 0;
 
   // Process data for charts
-  const assetAllocation = [
-    includeStock && { name: '주식', value: summary.totalStock },
-    includeCash && { name: '현금', value: summary.totalCash },
-    includeRealEstate && { name: '부동산', value: summary.totalRealEstate || 0 },
-    includePension && { name: '연금', value: summary.totalPension },
-  ].filter(Boolean).filter(item => item.value > 0);
+  let allocationTitle = '비중 확인 (Allocation)';
+  let displayAllocation = [];
+  let drillDownTotal = 0;
+
+  if (!drillDownCategory) {
+    displayAllocation = [
+      includeStock && { name: '주식', value: summary.totalStock },
+      includeCash && { name: '현금', value: summary.totalCash },
+      includeRealEstate && { name: '부동산', value: summary.totalRealEstate || 0 },
+      includePension && { name: '연금', value: summary.totalPension },
+    ].filter(Boolean).filter(item => item.value > 0);
+  } else {
+    allocationTitle = `${drillDownCategory} 상세 비중`;
+    let items = [];
+    const convert = (val, region) => (region === 'US' ? (val || 0) * currentExchangeRate : (val || 0));
+
+    if (drillDownCategory === '주식' || drillDownCategory === '연금') {
+      const typeStr = drillDownCategory === '주식' ? 'stock' : 'pension';
+      const categoryAssets = assets.filter(a => a.type === typeStr);
+
+      const krValue = categoryAssets.filter(a => a.investmentCountry === 'KR' || (!a.investmentCountry && a.region === 'KR')).reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
+      const usValue = categoryAssets.filter(a => a.investmentCountry === 'US' || (!a.investmentCountry && a.region === 'US')).reduce((sum, a) => sum + convert(a.totalValue, a.region), 0);
+
+      if (krValue > 0) items.push({ name: '한국', value: krValue });
+      if (usValue > 0) items.push({ name: '미국', value: usValue });
+    } else if (drillDownCategory === '현금') {
+      const categoryAssets = assets.filter(a => a.type === 'cash');
+      const krValue = categoryAssets.filter(a => a.region === 'KR').reduce((sum, a) => sum + (a.totalValue || 0), 0);
+      const usValue = categoryAssets.filter(a => a.region === 'US').reduce((sum, a) => sum + (a.totalValue || 0), 0);
+
+      if (krValue > 0) items.push({ name: '원화 (KRW)', value: krValue });
+      if (usValue > 0) items.push({ name: '달러 (USD)', value: usValue });
+    }
+
+    displayAllocation = items;
+    drillDownTotal = items.reduce((sum, item) => sum + item.value, 0);
+  }
 
   let chartHistory = [];
   if (filter === 'DAILY') {
@@ -250,31 +289,46 @@ export default function Dashboard() {
           {/* Asset Allocation (Donut) */}
           <div className="rounded-xl bg-white border border-slate-200 p-6 flex flex-col">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-slate-900">비중 확인 (Allocation)</h3>
-              <button className="text-slate-400 hover:text-slate-600"><MoreHorizontal size={20} /></button>
+              <div className="flex items-center gap-2">
+                {drillDownCategory && (
+                  <button
+                    onClick={() => setDrillDownCategory(null)}
+                    className="p-1 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                )}
+                <h3 className="text-lg font-bold text-slate-900">{allocationTitle}</h3>
+              </div>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
-              {assetAllocation.length > 0 ? (
+              {displayAllocation.length > 0 ? (
                 <>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-sm font-medium text-slate-500">총합계</span>
                     <span className="text-xl font-bold text-slate-900 z-0">
-                      {formatCurrency(displayTotalAssets)}
+                      {formatCurrency(drillDownCategory ? drillDownTotal : displayTotalAssets)}
                     </span>
                   </div>
                   <ResponsiveContainer width="100%" height={250} className="relative z-10">
                     <PieChart>
                       <Pie
-                        data={assetAllocation}
+                        data={displayAllocation}
                         cx="50%"
                         cy="50%"
                         innerRadius={85}
                         outerRadius={110}
                         paddingAngle={5}
                         dataKey="value"
+                        onClick={(data) => {
+                          if (!drillDownCategory && (data.name === '주식' || data.name === '연금' || data.name === '현금')) {
+                            setDrillDownCategory(data.name);
+                          }
+                        }}
+                        className={!drillDownCategory ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}
                       >
-                        {assetAllocation.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={ASSET_COLORS[entry.name]} />
+                        {displayAllocation.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={drillDownCategory ? DRILLDOWN_COLORS[entry.name] : ASSET_COLORS[entry.name]} />
                         ))}
                       </Pie>
                       <Tooltip
@@ -290,13 +344,15 @@ export default function Dashboard() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-4 mt-6">
-              {assetAllocation.map((item) => (
+              {displayAllocation.map((item) => (
                 <div key={item.name} className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: ASSET_COLORS[item.name] }}></span>
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: drillDownCategory ? DRILLDOWN_COLORS[item.name] : ASSET_COLORS[item.name] }}></span>
                   <div className="flex flex-col">
                     <span className="text-xs text-slate-500">{item.name}</span>
                     <span className="text-sm font-bold text-slate-900">
-                      {displayTotalAssets > 0 ? ((item.value / displayTotalAssets) * 100).toFixed(1) : 0}%
+                      {(drillDownCategory ? drillDownTotal : displayTotalAssets) > 0
+                        ? ((item.value / (drillDownCategory ? drillDownTotal : displayTotalAssets)) * 100).toFixed(1)
+                        : 0}%
                     </span>
                   </div>
                 </div>
@@ -361,7 +417,7 @@ export default function Dashboard() {
             <div key={assetType} className="rounded-xl bg-white border border-slate-200 overflow-hidden mt-6">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-slate-900">{title} 보유 현황 리스트</h3>
-                <Link href="/entry" className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
+                <Link href={`/entry?tab=${assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[700px]">
