@@ -22,7 +22,7 @@ const DRILLDOWN_COLORS = {
 
 export default function Dashboard() {
   const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary } = useAssetStore();
-  const [filter, setFilter] = useState('MONTHLY');
+  const [filter, setFilter] = useState('DAILY');
   const [includeStock, setIncludeStock] = useState(true);
   const [includeCash, setIncludeCash] = useState(true);
   const [includeRealEstate, setIncludeRealEstate] = useState(false);
@@ -197,7 +197,8 @@ export default function Dashboard() {
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
             </div>
-            <div className={`flex items-center gap-1 mt-2 text-xs font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+            <p className="text-[11px] text-slate-500 relative z-10 font-medium">단일 총계 (미선택 자산 포함): {formatCurrency(summary.totalAssets)}</p>
+            <div className={`flex items-center gap-1 mt-1 text-xs font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
               {displayTotalProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
               <span>{displayTotalProfit > 0 ? '+' : ''}{formatCurrency(displayTotalProfit)} ({formatPercent(displayProfitRate)})</span>
             </div>
@@ -365,19 +366,16 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-bold text-slate-900">자산 변동 추이</h3>
             </div>
-            <div className="mb-4">
-              <span className="text-3xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalAssets)}</span>
-            </div>
             <div className="flex-1 w-full h-[250px] mt-4">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="displayLabel" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => `${value / 10000}만`} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => value === 0 ? '0' : `${parseFloat((value / 100000000).toFixed(2))}억`} />
                   <Tooltip
-                    formatter={(value) => [
+                    formatter={(value, name) => [
                       formatCurrency(value),
-                      '총합계'
+                      name
                     ]}
                     labelFormatter={(label) => `시점: ${label}`}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
