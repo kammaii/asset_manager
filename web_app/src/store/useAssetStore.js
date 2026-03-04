@@ -7,6 +7,8 @@ const useAssetStore = create((set, get) => ({
     transactions: [],
     accountTypes: [],
     cashInstitutions: [],
+    savedStockItems: [],
+    savedPensionItems: [],
     loading: false,
     error: null,
 
@@ -16,6 +18,44 @@ const useAssetStore = create((set, get) => ({
             const res = await fetch('/api/assets');
             if (!res.ok) throw new Error('Failed to fetch assets');
             const data = await res.json();
+
+            // Generate savedStockItems and savedPensionItems from existing assets if not exist
+            const state = get();
+            const currentStockItems = [...(state.savedStockItems || [])];
+            const currentPensionItems = [...(state.savedPensionItems || [])];
+            let hasNewStockItem = false;
+            let hasNewPensionItem = false;
+
+            data.forEach(asset => {
+                if (asset.type === 'stock' && asset.symbol && asset.name) {
+                    const exists = currentStockItems.some(i => i.symbol === asset.symbol && i.name === asset.name);
+                    if (!exists) {
+                        currentStockItems.push({ symbol: asset.symbol, name: asset.name });
+                        hasNewStockItem = true;
+                    }
+                } else if (asset.type === 'pension' && asset.symbol && asset.name) {
+                    const exists = currentPensionItems.some(i => i.symbol === asset.symbol && i.name === asset.name);
+                    if (!exists) {
+                        currentPensionItems.push({ symbol: asset.symbol, name: asset.name });
+                        hasNewPensionItem = true;
+                    }
+                }
+            });
+
+            if (hasNewStockItem || hasNewPensionItem) {
+                // Update settings silently with the new generated items using current local state to merge if needed
+                const updatePayload = {};
+                if (hasNewStockItem) updatePayload.savedStockItems = currentStockItems;
+                if (hasNewPensionItem) updatePayload.savedPensionItems = currentPensionItems;
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatePayload)
+                });
+                if (hasNewStockItem) set({ savedStockItems: currentStockItems });
+                if (hasNewPensionItem) set({ savedPensionItems: currentPensionItems });
+            }
+
             set({ assets: data, loading: false });
         } catch (error) {
             set({ error: error.message, loading: false });
@@ -141,7 +181,9 @@ const useAssetStore = create((set, get) => ({
             const data = await res.json();
             set({
                 accountTypes: data.accountTypes || ['키움증권', 'NH투자증권', '미래에셋', 'IRP', 'ISA', '일반'],
-                cashInstitutions: data.cashInstitutions || ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행']
+                cashInstitutions: data.cashInstitutions || ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행'],
+                savedStockItems: data.savedStockItems || [],
+                savedPensionItems: data.savedPensionItems || [],
             });
         } catch (error) {
             console.error('Failed to load settings:', error);

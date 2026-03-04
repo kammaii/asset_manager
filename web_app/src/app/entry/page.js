@@ -6,7 +6,7 @@ import useAssetStore from '@/store/useAssetStore';
 import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash } from 'lucide-react';
 
 export default function EntryPage() {
-    const { assets, fetchAssets, transactions, fetchTransactions, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, fetchSettings, updateSettings, loading } = useAssetStore();
+    const { assets, fetchAssets, transactions, fetchTransactions, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, savedStockItems, savedPensionItems, fetchSettings, updateSettings, loading } = useAssetStore();
     const [activeTab, setActiveTab] = useState('stock');
     const [editingId, setEditingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
@@ -14,7 +14,11 @@ export default function EntryPage() {
     const [newInstitution, setNewInstitution] = useState('');
     const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
     const [newAccountType, setNewAccountType] = useState('');
+    const [isStockItemDropdownOpen, setIsStockItemDropdownOpen] = useState(false);
+    const [newStockSymbol, setNewStockSymbol] = useState('');
+    const [newStockName, setNewStockName] = useState('');
     const [currentExchangeRate, setCurrentExchangeRate] = useState(null);
+    const [visibleCount, setVisibleCount] = useState(10);
 
     const [formData, setFormData] = useState({
         action: 'buy',
@@ -74,9 +78,9 @@ export default function EntryPage() {
             price: '',
             expense: '',
             deposit: '',
-            realEstateCurrentPrice: ''
         });
         setEditingId(null);
+        setVisibleCount(10);
     }, [activeTab]);
 
     const addInstitution = async () => {
@@ -125,6 +129,50 @@ export default function EntryPage() {
     const handleAccountSelect = (type) => {
         setFormData(prev => ({ ...prev, account: type }));
         setIsAccountDropdownOpen(false);
+    };
+
+    const addStockItem = async () => {
+        if (newStockSymbol.trim() && newStockName.trim()) {
+            const sym = newStockSymbol.trim().toUpperCase();
+            const nm = newStockName.trim();
+            const isPension = activeTab === 'pension';
+            const currentItems = isPension ? (savedPensionItems || []) : (savedStockItems || []);
+            const exists = currentItems.some(item => item.symbol === sym && item.name === nm);
+            if (!exists) {
+                const updated = [...currentItems, { symbol: sym, name: nm }];
+                if (isPension) {
+                    await updateSettings({ savedPensionItems: updated });
+                } else {
+                    await updateSettings({ savedStockItems: updated });
+                }
+            }
+            setFormData(prev => ({ ...prev, symbol: sym, name: nm }));
+            setNewStockSymbol('');
+            setNewStockName('');
+            setIsStockItemDropdownOpen(false);
+        } else {
+            alert('종목코드와 자산이름을 모두 입력해주세요.');
+        }
+    };
+
+    const removeStockItem = async (itemToRemove, e) => {
+        e.stopPropagation();
+        const isPension = activeTab === 'pension';
+        const currentItems = isPension ? (savedPensionItems || []) : (savedStockItems || []);
+        const updated = currentItems.filter(item => !(item.symbol === itemToRemove.symbol && item.name === itemToRemove.name));
+        if (isPension) {
+            await updateSettings({ savedPensionItems: updated });
+        } else {
+            await updateSettings({ savedStockItems: updated });
+        }
+        if (formData.symbol === itemToRemove.symbol && formData.name === itemToRemove.name) {
+            setFormData(prev => ({ ...prev, symbol: '', name: '' }));
+        }
+    };
+
+    const handleStockItemSelect = (item) => {
+        setFormData(prev => ({ ...prev, symbol: item.symbol, name: item.name }));
+        setIsStockItemDropdownOpen(false);
     };
 
     const handleInputChange = (e) => {
@@ -304,6 +352,7 @@ export default function EntryPage() {
             }
         } catch (e) {
             console.error("오류 발생: " + e.message);
+            alert("처리 중 오류가 발생했습니다: " + e.message);
         }
     };
 
@@ -535,14 +584,78 @@ export default function EntryPage() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex flex-col gap-1 min-w-[120px]">
-                                        <label className="text-xs font-semibold text-slate-500">종목코드 (심볼)</label>
-                                        <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder={activeTab === 'cash' ? "Ex: NH" : "Ex: 005930"} className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
-                                    </div>
-                                    <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
-                                        <label className="text-xs font-semibold text-slate-500">자산 이름</label>
-                                        <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ex: 삼성전자" className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
-                                    </div>
+                                    {(activeTab === 'stock' || activeTab === 'pension') ? (
+                                        <div className="flex flex-col gap-1 min-w-[200px] flex-1 relative">
+                                            <label className="text-xs font-semibold text-slate-500">자산 종목 (코드 - 이름)</label>
+                                            <div
+                                                className="border border-slate-300 rounded px-2 py-1.5 text-sm flex justify-between items-center cursor-pointer bg-white"
+                                                onClick={() => setIsStockItemDropdownOpen(!isStockItemDropdownOpen)}
+                                            >
+                                                <span className={(formData.symbol || formData.name) ? "text-slate-900" : "text-slate-400"}>
+                                                    {formData.symbol && formData.name ? `${formData.symbol} - ${formData.name}` : formData.name || formData.symbol || "종목 선택 또는 추가..."}
+                                                </span>
+                                                <ChevronDown size={16} className="text-slate-400" />
+                                            </div>
+                                            {isStockItemDropdownOpen && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-60 overflow-y-auto w-full md:min-w-[320px]">
+                                                    {(activeTab === 'pension' ? (savedPensionItems || []) : (savedStockItems || [])).map((item, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => handleStockItemSelect(item)}>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-bold text-slate-700 uppercase">{item.symbol}</span>
+                                                                <span className="text-xs text-slate-400">-</span>
+                                                                <span className="text-sm font-medium text-slate-600">{item.name}</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={(e) => removeStockItem(item, e)}
+                                                                className="text-slate-300 hover:text-red-500 p-1"
+                                                                title="삭제"
+                                                            >
+                                                                <Trash size={14} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                    <div className="p-2 flex flex-col sm:flex-row gap-2 border-t border-slate-200 bg-slate-50">
+                                                        <input
+                                                            type="text"
+                                                            value={newStockSymbol}
+                                                            onChange={(e) => setNewStockSymbol(e.target.value)}
+                                                            placeholder="코드(Ex: AAPL)"
+                                                            className="w-[100px] sm:w-[80px] border border-slate-300 rounded px-2 py-1 text-sm bg-white uppercase"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={newStockName}
+                                                            onChange={(e) => setNewStockName(e.target.value)}
+                                                            placeholder="이름(Ex: 애플)"
+                                                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    addStockItem();
+                                                                }
+                                                            }}
+                                                        />
+                                                        <button onClick={(e) => { e.preventDefault(); addStockItem(); }} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded transition-colors whitespace-nowrap text-sm font-bold">
+                                                            추가
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex flex-col gap-1 min-w-[120px]">
+                                                <label className="text-xs font-semibold text-slate-500">종목코드 (선택)</label>
+                                                <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder="Ex: NH" className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
+                                            </div>
+                                            <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
+                                                <label className="text-xs font-semibold text-slate-500">자산 이름</label>
+                                                <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ex: 삼성전자" className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                            </div>
+                                        </>
+                                    )}
                                     <div className="flex flex-col gap-1 min-w-[120px]">
                                         <label className="text-xs font-semibold text-slate-500">체결 단가 (환율)</label>
                                         <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder={activeTab === 'cash' ? "원화는 1" : "0"} className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
@@ -689,7 +802,7 @@ export default function EntryPage() {
                                                 <td colSpan={activeTab === 'cash' ? "6" : "10"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
                                             </tr>
                                         ) : (
-                                            filteredTransactions.map(trx => (
+                                            filteredTransactions.slice(0, visibleCount).map(trx => (
                                                 <tr key={trx.id} className="hover:bg-slate-50 transition-colors">
                                                     {activeTab === 'cash' ? (
                                                         // Cash Table Row Rendering
@@ -768,6 +881,16 @@ export default function EntryPage() {
                                 </tbody>
                             </table>
                         </div>
+                        {activeTab !== 'real_estate' && visibleCount < filteredTransactions.length && (
+                            <div className="flex justify-center mt-6 mb-2">
+                                <button
+                                    onClick={() => setVisibleCount(prev => prev + 10)}
+                                    className="px-6 py-2 bg-white border border-slate-300 text-sm font-bold text-slate-600 rounded-full hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all"
+                                >
+                                    더보기
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </main>

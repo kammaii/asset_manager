@@ -135,16 +135,18 @@ export async function POST(request) {
         const prc = parseFloat(price);
 
         const assetsRef = collection(db, 'assets');
-        // Allow multiple items with the same region, symbol, name, and account, but different investmentCountry to be technically separate if necessary, but actually let's not break query.
         const queryConstraints = [
             where('type', '==', type),
             where('region', '==', region || 'KR'),
-            where('symbol', '==', symbol || ''),
             where('name', '==', name),
-            where('account', '==', account || '일반')
         ];
-        if (investmentCountry) {
-            queryConstraints.push(where('investmentCountry', '==', investmentCountry));
+        // 현금과 부동산은 account, symbol 등을 제외하고 이름 단위로 기존 자산을 매칭함
+        if (type === 'stock' || type === 'pension') {
+            queryConstraints.push(where('account', '==', account || '일반'));
+            queryConstraints.push(where('symbol', '==', symbol || ''));
+            if (investmentCountry) {
+                queryConstraints.push(where('investmentCountry', '==', investmentCountry));
+            }
         }
         const q = query(assetsRef, ...queryConstraints);
         const snapshot = await getDocs(q);

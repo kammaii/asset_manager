@@ -197,7 +197,7 @@ export default function Dashboard() {
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
             </div>
-            <p className="text-[11px] text-slate-500 relative z-10 font-medium">단일 총계 (미선택 자산 포함): {formatCurrency(summary.totalAssets)}</p>
+            <p className="text-[11px] text-slate-500 relative z-10 font-medium">미선택 자산 포함: {formatCurrency(summary.totalAssets)}</p>
             <div className={`flex items-center gap-1 mt-1 text-xs font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
               {displayTotalProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
               <span>{displayTotalProfit > 0 ? '+' : ''}{formatCurrency(displayTotalProfit)} ({formatPercent(displayProfitRate)})</span>
