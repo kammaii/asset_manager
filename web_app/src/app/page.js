@@ -29,8 +29,10 @@ export default function Dashboard() {
   const [includePension, setIncludePension] = useState(false);
   const [currentExchangeRate, setCurrentExchangeRate] = useState(1400); // Default fallback
   const [drillDownCategory, setDrillDownCategory] = useState(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     fetchAssets();
     fetchHistory();
 
@@ -135,6 +137,14 @@ export default function Dashboard() {
     chartHistory = [
       { displayLabel: '01.01', totalValue: summary.totalAssets || 0 }
     ];
+  }
+
+  if (!mounted) {
+    return (
+      <div className="flex bg-[#f5f7f8] min-h-screen justify-center items-center">
+        <div className="text-[#0d7ff2] animate-pulse font-bold">로딩 중...</div>
+      </div>
+    );
   }
 
   return (

@@ -6,7 +6,7 @@ import useAssetStore from '@/store/useAssetStore';
 import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash } from 'lucide-react';
 
 export default function EntryPage() {
-    const { assets, fetchAssets, transactions, fetchTransactions, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, savedStockItems, savedPensionItems, fetchSettings, updateSettings, loading } = useAssetStore();
+    const { assets, fetchAssets, transactions, fetchTransactions, allTransactionsLoaded, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, savedStockItems, savedPensionItems, fetchSettings, updateSettings, loading } = useAssetStore();
     const [activeTab, setActiveTab] = useState('stock');
     const [editingId, setEditingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
@@ -19,6 +19,7 @@ export default function EntryPage() {
     const [newStockName, setNewStockName] = useState('');
     const [currentExchangeRate, setCurrentExchangeRate] = useState(null);
     const [visibleCount, setVisibleCount] = useState(10);
+    const [mounted, setMounted] = useState(false);
 
     const [formData, setFormData] = useState({
         action: 'buy',
@@ -36,6 +37,7 @@ export default function EntryPage() {
     });
 
     useEffect(() => {
+        setMounted(true);
         fetchSettings();
         fetchAssets();
         fetchTransactions();
@@ -366,6 +368,14 @@ export default function EntryPage() {
     const filteredTransactions = transactions?.filter(t => t.type === activeTab) || [];
     const filteredAssets = assets.filter(a => a.type === activeTab);
     const totalCategoryValue = filteredAssets.reduce((sum, a) => sum + (a.totalValue || 0), 0);
+
+    if (!mounted) {
+        return (
+            <div className="flex bg-[#f5f7f8] min-h-screen justify-center items-center">
+                <div className="text-[#0d7ff2] animate-pulse font-bold">로딩 중...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-[#f5f7f8] min-h-screen text-slate-900 font-sans flex flex-col">
@@ -881,10 +891,15 @@ export default function EntryPage() {
                                 </tbody>
                             </table>
                         </div>
-                        {activeTab !== 'real_estate' && visibleCount < filteredTransactions.length && (
+                        {activeTab !== 'real_estate' && (visibleCount < filteredTransactions.length || (!allTransactionsLoaded && transactions.length >= 20)) && (
                             <div className="flex justify-center mt-6 mb-2">
                                 <button
-                                    onClick={() => setVisibleCount(prev => prev + 10)}
+                                    onClick={() => {
+                                        if (!allTransactionsLoaded && visibleCount + 10 > filteredTransactions.length) {
+                                            fetchTransactions(true);
+                                        }
+                                        setVisibleCount(prev => prev + 10);
+                                    }}
                                     className="px-6 py-2 bg-white border border-slate-300 text-sm font-bold text-slate-600 rounded-full hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all"
                                 >
                                     더보기
