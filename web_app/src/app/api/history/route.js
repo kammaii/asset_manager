@@ -36,7 +36,8 @@ export async function GET(request) {
             stock: 0,
             pension: 0,
             cash: 0,
-            real_estate: 0
+            real_estate: 0,
+            gold: 0
         };
 
         await Promise.all(assetsSnap.docs.map(async (docSnap) => {
@@ -45,6 +46,11 @@ export async function GET(request) {
                 const currentPrice = asset.realEstateCurrentPrice || asset.avgPrice || 0;
                 const value = (currentPrice - (asset.deposit || 0)) * (asset.region === 'US' ? exchangeRate : 1);
                 balances['real_estate'] = (balances['real_estate'] || 0) + value;
+                return;
+            } else if (asset.type === 'gold') {
+                const currentPrice = asset.goldCurrentPrice || asset.avgPrice || 0;
+                const value = asset.quantity * currentPrice * (asset.region === 'US' ? exchangeRate : 1);
+                balances['gold'] = (balances['gold'] || 0) + value;
                 return;
             }
 
@@ -84,13 +90,14 @@ export async function GET(request) {
             balances[asset.type] = (balances[asset.type] || 0) + value;
         }));
 
-        const totalValue = (balances.stock || 0) + (balances.cash || 0) + (balances.pension || 0) + (balances.real_estate || 0);
+        const totalValue = (balances.stock || 0) + (balances.cash || 0) + (balances.pension || 0) + (balances.real_estate || 0) + (balances.gold || 0);
 
         const currentBaseSnapshot = {
             stockValue: balances.stock || 0,
             cashValue: balances.cash || 0,
             pensionValue: balances.pension || 0,
             realEstateValue: balances.real_estate || 0,
+            goldValue: balances.gold || 0,
             totalValue: totalValue,
             updatedAt: new Date().toISOString()
         };

@@ -9,8 +9,9 @@ import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripH
 const ASSET_COLORS = {
   '주식': '#3b82f6',
   '현금': '#22c55e',
-  '부동산': '#facc15',
-  '연금': '#a855f7'
+  '부동산': '#ff7f50', // Coral (Soft Red-Orange)
+  '연금': '#a855f7',
+  '금(Gold)': '#eab308'
 };
 
 const DRILLDOWN_COLORS = {
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [includeCash, setIncludeCash] = useState(true);
   const [includeRealEstate, setIncludeRealEstate] = useState(false);
   const [includePension, setIncludePension] = useState(false);
+  const [includeGold, setIncludeGold] = useState(false);
   const [currentExchangeRate, setCurrentExchangeRate] = useState(1400); // Default fallback
   const [drillDownCategory, setDrillDownCategory] = useState(null);
   const [mounted, setMounted] = useState(false);
@@ -64,13 +66,15 @@ export default function Dashboard() {
     (includeStock ? summary.totalStock : 0) +
     (includeCash ? summary.totalCash : 0) +
     (includeRealEstate ? (summary.totalRealEstate || 0) : 0) +
-    (includePension ? summary.totalPension : 0);
+    (includePension ? summary.totalPension : 0) +
+    (includeGold ? (summary.totalGold || 0) : 0);
 
   const displayTotalProfit =
     (includeStock ? summary.stockProfit : 0) +
     (includeCash ? summary.cashProfit : 0) +
     (includeRealEstate ? (summary.realEstateProfit || 0) : 0) +
-    (includePension ? summary.pensionProfit : 0);
+    (includePension ? summary.pensionProfit : 0) +
+    (includeGold ? (summary.goldProfit || 0) : 0);
 
   const displayTotalPrincipal = displayTotalAssets - displayTotalProfit;
   const displayProfitRate = displayTotalPrincipal > 0 ? (displayTotalProfit / displayTotalPrincipal) * 100 : 0;
@@ -86,6 +90,7 @@ export default function Dashboard() {
       includeCash && { name: '현금', value: summary.totalCash },
       includeRealEstate && { name: '부동산', value: summary.totalRealEstate || 0 },
       includePension && { name: '연금', value: summary.totalPension },
+      includeGold && { name: '금(Gold)', value: summary.totalGold || 0 },
     ].filter(Boolean).filter(item => item.value > 0);
   } else {
     allocationTitle = `${drillDownCategory} 상세 비중`;
@@ -199,28 +204,37 @@ export default function Dashboard() {
         </div>
 
         {/* Top Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1">
             <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500">전체 자산 (Total Assets)</p>
+              <p className="text-sm font-medium text-slate-500 flex flex-col">
+                <span>전체 자산</span>
+                <span className="text-[11px] opacity-70">Total Assets</span>
+              </p>
             </div>
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
             </div>
             <p className="text-[11px] text-slate-500 relative z-10 font-medium">미선택 자산 포함: {formatCurrency(summary.totalAssets)}</p>
-            <div className={`flex items-center gap-1 mt-1 text-xs font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              {displayTotalProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>{displayTotalProfit > 0 ? '+' : ''}{formatCurrency(displayTotalProfit)} ({formatPercent(displayProfitRate)})</span>
+            <div className={`flex flex-col mt-1 text-xs font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+              <div className="flex items-center gap-1">
+                {displayTotalProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                <span>{displayTotalProfit > 0 ? '+' : ''}{formatCurrency(displayTotalProfit)}</span>
+              </div>
+              <span className="ml-[20px] opacity-80">({formatPercent(displayProfitRate)})</span>
             </div>
           </div>
 
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
             <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-blue-50 transition-colors z-0"></div>
             <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500">주식 자산 (Total Stocks)</p>
+              <p className="text-sm font-medium text-slate-500 flex flex-col">
+                <span>주식 자산</span>
+                <span className="text-[11px] opacity-70">Total Stocks</span>
+              </p>
               <button
                 onClick={() => setIncludeStock(!includeStock)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${includeStock ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeStock ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}
               >
                 {includeStock ? '포함' : '불포함'}
               </button>
@@ -228,19 +242,25 @@ export default function Dashboard() {
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalStock)}</span>
             </div>
-            <div className={`flex items-center gap-1 mt-2 text-xs font-bold relative z-10 ${summary.stockProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              {summary.stockProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>{summary.stockProfit > 0 ? '+' : ''}{formatCurrency(summary.stockProfit)} ({formatPercent(summary.stockRate)})</span>
+            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.stockProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+              <div className="flex items-center gap-1">
+                {summary.stockProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                <span>{summary.stockProfit > 0 ? '+' : ''}{formatCurrency(summary.stockProfit)}</span>
+              </div>
+              <span className="ml-[20px] opacity-80">({formatPercent(summary.stockRate)})</span>
             </div>
           </div>
 
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
             <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-green-50 transition-colors z-0"></div>
             <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500">현금 자산 (Total Cash)</p>
+              <p className="text-sm font-medium text-slate-500 flex flex-col">
+                <span>현금 자산</span>
+                <span className="text-[11px] opacity-70">Total Cash</span>
+              </p>
               <button
                 onClick={() => setIncludeCash(!includeCash)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${includeCash ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeCash ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}
               >
                 {includeCash ? '포함' : '불포함'}
               </button>
@@ -248,19 +268,25 @@ export default function Dashboard() {
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalCash)}</span>
             </div>
-            <div className={`flex items-center gap-1 mt-2 text-xs font-bold relative z-10 ${summary.cashProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              {summary.cashProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>{summary.cashProfit > 0 ? '+' : ''}{formatCurrency(summary.cashProfit)} ({formatPercent(summary.cashRate)})</span>
+            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.cashProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+              <div className="flex items-center gap-1">
+                {summary.cashProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                <span>{summary.cashProfit > 0 ? '+' : ''}{formatCurrency(summary.cashProfit)}</span>
+              </div>
+              <span className="ml-[20px] opacity-80">({formatPercent(summary.cashRate)})</span>
             </div>
           </div>
 
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-yellow-50 transition-colors z-0"></div>
+            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-coral-50 transition-colors z-0" style={{ backgroundColor: '#fff5f2' }}></div>
             <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500">부동산 자산 (Real Estate)</p>
+              <p className="text-sm font-medium text-slate-500 flex flex-col">
+                <span>부동산 자산</span>
+                <span className="text-[11px] opacity-70">Real Estate</span>
+              </p>
               <button
                 onClick={() => setIncludeRealEstate(!includeRealEstate)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${includeRealEstate ? 'bg-yellow-100 text-yellow-600' : 'bg-slate-200 text-slate-500'}`}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeRealEstate ? 'bg-orange-100 text-orange-600' : 'bg-slate-200 text-slate-500'}`}
               >
                 {includeRealEstate ? '포함' : '불포함'}
               </button>
@@ -268,19 +294,25 @@ export default function Dashboard() {
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalRealEstate || 0)}</span>
             </div>
-            <div className={`flex items-center gap-1 mt-2 text-xs font-bold relative z-10 ${summary.realEstateProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              {summary.realEstateProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>{summary.realEstateProfit > 0 ? '+' : ''}{formatCurrency(summary.realEstateProfit || 0)} ({formatPercent(summary.realEstateRate || 0)})</span>
+            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.realEstateProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+              <div className="flex items-center gap-1">
+                {summary.realEstateProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                <span>{summary.realEstateProfit > 0 ? '+' : ''}{formatCurrency(summary.realEstateProfit || 0)}</span>
+              </div>
+              <span className="ml-[20px] opacity-80">({formatPercent(summary.realEstateRate || 0)})</span>
             </div>
           </div>
 
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
             <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-purple-50 transition-colors z-0"></div>
             <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500">연금 자산 (Total Pension)</p>
+              <p className="text-sm font-medium text-slate-500 flex flex-col">
+                <span>연금 자산</span>
+                <span className="text-[11px] opacity-70">Total Pension</span>
+              </p>
               <button
                 onClick={() => setIncludePension(!includePension)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${includePension ? 'bg-purple-100 text-purple-600' : 'bg-slate-200 text-slate-500'}`}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includePension ? 'bg-purple-100 text-purple-600' : 'bg-slate-200 text-slate-500'}`}
               >
                 {includePension ? '포함' : '불포함'}
               </button>
@@ -288,9 +320,38 @@ export default function Dashboard() {
             <div className="flex items-end gap-2 mt-1 relative z-10">
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalPension)}</span>
             </div>
-            <div className={`flex items-center gap-1 mt-2 text-xs font-bold relative z-10 ${summary.pensionProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              {summary.pensionProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>{summary.pensionProfit > 0 ? '+' : ''}{formatCurrency(summary.pensionProfit)} ({formatPercent(summary.pensionRate)})</span>
+            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.pensionProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+              <div className="flex items-center gap-1">
+                {summary.pensionProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                <span>{summary.pensionProfit > 0 ? '+' : ''}{formatCurrency(summary.pensionProfit)}</span>
+              </div>
+              <span className="ml-[20px] opacity-80">({formatPercent(summary.pensionRate)})</span>
+            </div>
+          </div>
+
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
+            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-amber-50 transition-colors z-0"></div>
+            <div className="flex justify-between items-center relative z-10">
+              <p className="text-sm font-medium text-slate-500 flex flex-col">
+                <span>금 자산</span>
+                <span className="text-[11px] opacity-70">Total Gold</span>
+              </p>
+              <button
+                onClick={() => setIncludeGold(!includeGold)}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeGold ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}
+              >
+                {includeGold ? '포함' : '불포함'}
+              </button>
+            </div>
+            <div className="flex items-end gap-2 mt-1 relative z-10">
+              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalGold || 0)}</span>
+            </div>
+            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.goldProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+              <div className="flex items-center gap-1">
+                {summary.goldProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                <span>{summary.goldProfit > 0 ? '+' : ''}{formatCurrency(summary.goldProfit || 0)}</span>
+              </div>
+              <span className="ml-[20px] opacity-80">({formatPercent(summary.goldRate || 0)})</span>
             </div>
           </div>
         </div>
@@ -397,13 +458,15 @@ export default function Dashboard() {
                       includeStock && { value: '주식', type: 'circle', id: 'stockValue', color: ASSET_COLORS['주식'] },
                       includeCash && { value: '현금', type: 'circle', id: 'cashValue', color: ASSET_COLORS['현금'] },
                       includeRealEstate && { value: '부동산', type: 'circle', id: 'realEstateValue', color: ASSET_COLORS['부동산'] },
-                      includePension && { value: '연금', type: 'circle', id: 'pensionValue', color: ASSET_COLORS['연금'] }
+                      includePension && { value: '연금', type: 'circle', id: 'pensionValue', color: ASSET_COLORS['연금'] },
+                      includeGold && { value: '금(Gold)', type: 'circle', id: 'goldValue', color: ASSET_COLORS['금(Gold)'] }
                     ].filter(Boolean)}
                   />
                   {includeStock && <Bar dataKey="stockValue" name="주식" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />}
                   {includeCash && <Bar dataKey="cashValue" name="현금" stackId="a" fill="#22c55e" />}
-                  {includeRealEstate && <Bar dataKey="realEstateValue" name="부동산" stackId="a" fill="#facc15" />}
-                  {includePension && <Bar dataKey="pensionValue" name="연금" stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />}
+                  {includeRealEstate && <Bar dataKey="realEstateValue" name="부동산" stackId="a" fill="#ff7f50" />}
+                  {includePension && <Bar dataKey="pensionValue" name="연금" stackId="a" fill="#a855f7" radius={includeGold ? [0, 0, 0, 0] : [4, 4, 0, 0]} />}
+                  {includeGold && <Bar dataKey="goldValue" name="금(Gold)" stackId="a" fill="#eab308" radius={[4, 4, 0, 0]} />}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -411,13 +474,13 @@ export default function Dashboard() {
         </div>
 
         {/* Portfolio Tables */}
-        {['stock', 'pension', 'cash', 'real_estate'].map(assetType => {
+        {['stock', 'pension', 'cash', 'real_estate', 'gold'].map(assetType => {
           const filteredAssets = assets.filter(a => a.type === assetType).sort((a, b) => {
             const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
             const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
             return valB - valA;
           });
-          const title = assetType === 'stock' ? '주식' : assetType === 'pension' ? '연금' : assetType === 'real_estate' ? '부동산' : '현금';
+          const title = assetType === 'stock' ? '주식' : assetType === 'pension' ? '연금' : assetType === 'real_estate' ? '부동산' : assetType === 'gold' ? '금(Gold)' : '현금';
 
           if (filteredAssets.length === 0 && assetType !== 'stock') return null; // Ensure at least stock table shows even if empty
 
@@ -425,7 +488,7 @@ export default function Dashboard() {
             <div key={assetType} className="rounded-xl bg-white border border-slate-200 overflow-hidden mt-6">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-slate-900">{title} 보유 현황 리스트</h3>
-                <Link href={`/entry?tab=${assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
+                <Link href={`/entry?tab=${assetType === 'gold' ? 'gold' : assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[700px]">
@@ -434,6 +497,15 @@ export default function Dashboard() {
                       <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
                         <th className="p-4">금융기관명</th>
                         <th className="p-4 text-right">금액</th>
+                      </tr>
+                    ) : assetType === 'gold' ? (
+                      <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
+                        <th className="p-4">자산명</th>
+                        <th className="p-4 text-right">보유량 (돈)</th>
+                        <th className="p-4 text-right">매수 단가 (평균)</th>
+                        <th className="p-4 text-right">현재가</th>
+                        <th className="p-4 text-right">현재 평가액</th>
+                        <th className="p-4 text-right">수익금 / 수익률</th>
                       </tr>
                     ) : assetType === 'real_estate' ? (
                       <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
@@ -476,6 +548,28 @@ export default function Dashboard() {
                                       ≈ {formatCurrency(asset.quantity * currentExchangeRate, 'KR')}
                                     </span>
                                   )}
+                                </div>
+                              </td>
+                            </>
+                          ) : assetType === 'gold' ? (
+                            <>
+                              <td className="p-4 font-bold text-slate-900">{asset.name}</td>
+                              <td className="p-4 text-right font-medium text-slate-700">{asset.quantity.toLocaleString()}</td>
+                              <td className="p-4 text-right text-slate-600 pr-5">{formatCurrency(asset.avgPrice, 'KR')}</td>
+                              <td className="p-4 text-right text-slate-600 pr-5">{formatCurrency(asset.goldCurrentPrice || asset.avgPrice, 'KR')}</td>
+                              <td className="p-4 text-right font-bold text-slate-900">
+                                <div className="flex flex-col items-end">
+                                  <span>{formatCurrency(asset.totalValue, 'KR')}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className={`font-bold ${asset.profitGain >= 0 ? 'text-[#ff4d4f]' : 'text-[#0d7ff2]'}`}>
+                                    {asset.profitGain > 0 ? '+' : ''}{formatCurrency(asset.profitGain, 'KR')}
+                                  </span>
+                                  <span className={`text-xs mt-0.5 px-1.5 py-0.5 rounded ${asset.profitRate >= 0 ? 'text-[#ff4d4f] bg-red-50' : 'text-[#0d7ff2] bg-blue-50'}`}>
+                                    {asset.profitRate > 0 ? '+' : ''}{asset.profitRate.toFixed(2)}%
+                                  </span>
                                 </div>
                               </td>
                             </>

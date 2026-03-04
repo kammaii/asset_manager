@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import useAssetStore from '@/store/useAssetStore';
-import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash, Gem } from 'lucide-react';
 
 export default function EntryPage() {
     const { assets, fetchAssets, transactions, fetchTransactions, allTransactionsLoaded, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, savedStockItems, savedPensionItems, fetchSettings, updateSettings, loading } = useAssetStore();
@@ -18,6 +18,7 @@ export default function EntryPage() {
     const [newStockSymbol, setNewStockSymbol] = useState('');
     const [newStockName, setNewStockName] = useState('');
     const [currentExchangeRate, setCurrentExchangeRate] = useState(null);
+    const [currentGoldPrice, setCurrentGoldPrice] = useState(null);
     const [visibleCount, setVisibleCount] = useState(10);
     const [mounted, setMounted] = useState(false);
 
@@ -33,7 +34,8 @@ export default function EntryPage() {
         price: '',
         expense: '',
         deposit: '',
-        realEstateCurrentPrice: ''
+        realEstateCurrentPrice: '',
+        goldCurrentPrice: ''
     });
 
     useEffect(() => {
@@ -56,11 +58,25 @@ export default function EntryPage() {
         };
         fetchRate();
 
+        // Fetch current gold price
+        const fetchGold = async () => {
+            try {
+                const res = await fetch('/api/gold-price');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.pricePerDon) setCurrentGoldPrice(data.pricePerDon);
+                }
+            } catch (error) {
+                console.error("Failed to fetch gold price", error);
+            }
+        };
+        fetchGold();
+
         // Initial tab check
         if (typeof window !== 'undefined') {
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab');
-            if (tabParam && ['stock', 'pension', 'cash', 'real_estate'].includes(tabParam)) {
+            if (tabParam && ['stock', 'pension', 'cash', 'real_estate', 'gold'].includes(tabParam)) {
                 setActiveTab(tabParam);
             }
         }
@@ -196,7 +212,8 @@ export default function EntryPage() {
             price: trx.price.toString(),
             expense: trx.expense?.toString() || '',
             deposit: trx.deposit?.toString() || '',
-            realEstateCurrentPrice: trx.realEstateCurrentPrice?.toString() || ''
+            realEstateCurrentPrice: trx.realEstateCurrentPrice?.toString() || '',
+            goldCurrentPrice: trx.goldCurrentPrice?.toString() || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -226,7 +243,7 @@ export default function EntryPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -262,6 +279,11 @@ export default function EntryPage() {
                     alert("필수 항목을 모두 입력해주세요 (부동산명, 매수일, 매수가, 비용, 현재가).");
                     return;
                 }
+            } else if (activeTab === 'gold') {
+                if (!formData.name || !formData.quantity || !formData.price || !formData.action || !formData.date) {
+                    alert("필수 항목을 모두 입력해주세요 (자산명, 수량(돈), 매수/매도, 날짜, 단가).");
+                    return;
+                }
             } else {
                 if (!formData.name || !formData.quantity || !formData.price || !formData.action || !formData.date) {
                     alert("필수 항목을 모두 입력해주세요 (종목명, 수량, 단가, 날짜, 매수/매도).");
@@ -286,6 +308,8 @@ export default function EntryPage() {
                     updatePayload.expense = parseFloat(formData.expense) || 0;
                     updatePayload.deposit = parseFloat(formData.deposit) || 0;
                     updatePayload.realEstateCurrentPrice = parseFloat(formData.realEstateCurrentPrice) || 0;
+                } else if (activeTab === 'gold') {
+                    updatePayload.goldCurrentPrice = parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price) || 0;
                 }
                 await updateTransaction(editingId, updatePayload);
                 cancelEdit();
@@ -347,10 +371,11 @@ export default function EntryPage() {
                     symbol: formData.symbol.toUpperCase(),
                     name: formData.name,
                     quantity: parseFloat(formData.quantity),
-                    price: parseFloat(formData.price)
+                    price: parseFloat(formData.price),
+                    goldCurrentPrice: parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price)
                 });
 
-                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '' }));
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '' }));
             }
         } catch (e) {
             console.error("오류 발생: " + e.message);
@@ -414,6 +439,7 @@ export default function EntryPage() {
                                 { id: 'pension', icon: PiggyBank, label: '연금 (Pension)' },
                                 { id: 'cash', icon: Banknote, label: '현금 (Cash)' },
                                 { id: 'real_estate', icon: Building, label: '부동산 (Real Est.)' },
+                                { id: 'gold', icon: Gem, label: '금 (Gold)' },
                             ].map((tab) => (
                                 <button
                                     key={tab.id}
@@ -583,6 +609,14 @@ export default function EntryPage() {
                                                 </select>
                                             </div>
                                         )}
+                                        {activeTab === 'gold' && (
+                                            <div className="flex flex-col gap-1 min-w-[100px]">
+                                                <label className="text-xs font-semibold text-slate-500">통화</label>
+                                                <select name="region" value="KR" readOnly className="border border-slate-300 rounded px-2 py-1.5 text-sm bg-slate-50 text-slate-500 cursor-not-allowed">
+                                                    <option value="KR">KRW (원화)</option>
+                                                </select>
+                                            </div>
+                                        )}
                                         {/* New 투자 국가 (Investment Country) selection for stock & pension */}
                                         {(activeTab === 'stock' || activeTab === 'pension') && (
                                             <div className="flex flex-col gap-1 min-w-[100px]">
@@ -656,22 +690,24 @@ export default function EntryPage() {
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="flex flex-col gap-1 min-w-[120px]">
-                                                <label className="text-xs font-semibold text-slate-500">종목코드 (선택)</label>
-                                                <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder="Ex: NH" className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
-                                            </div>
+                                            {(activeTab !== 'gold') && (
+                                                <div className="flex flex-col gap-1 min-w-[120px]">
+                                                    <label className="text-xs font-semibold text-slate-500">종목코드 (선택)</label>
+                                                    <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder="Ex: NH" className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
+                                                </div>
+                                            )}
                                             <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
-                                                <label className="text-xs font-semibold text-slate-500">자산 이름</label>
-                                                <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ex: 삼성전자" className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                                <label className="text-xs font-semibold text-slate-500">{activeTab === 'gold' ? '자산 이름 (금)' : '자산 이름'}</label>
+                                                <input name="name" value={formData.name} onChange={handleInputChange} placeholder={activeTab === 'gold' ? "Ex: 골드바, 돌반지" : "Ex: 삼성전자"} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
                                             </div>
                                         </>
                                     )}
                                     <div className="flex flex-col gap-1 min-w-[120px]">
-                                        <label className="text-xs font-semibold text-slate-500">체결 단가 (환율)</label>
+                                        <label className="text-xs font-semibold text-slate-500">{activeTab === 'gold' ? '매수 단가 (1돈당)' : '체결 단가 (환율)'}</label>
                                         <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder={activeTab === 'cash' ? "원화는 1" : "0"} className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
                                     </div>
                                     <div className="flex flex-col gap-1 min-w-[100px]">
-                                        <label className="text-xs font-semibold text-slate-500">거래 수량</label>
+                                        <label className="text-xs font-semibold text-slate-500">{activeTab === 'gold' ? '거래 수량 (돈)' : '거래 수량'}</label>
                                         <input type="number" name="quantity" value={formData.quantity} onChange={handleInputChange} placeholder="0" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
                                     </div>
                                 </>
@@ -692,12 +728,18 @@ export default function EntryPage() {
 
                     <div className="p-4 sm:p-6 pb-4 flex justify-between items-center bg-white border-b border-slate-200">
                         <h3 className="text-md font-bold text-slate-800">
-                            {activeTab === 'cash' ? '현금 현황' : activeTab === 'real_estate' ? '부동산 현황 리스트' : '거래 내역 (Transaction History)'}
+                            {activeTab === 'cash' ? '현금 현황' : activeTab === 'real_estate' ? '부동산 현황 리스트' : activeTab === 'gold' ? '금 보유 현황' : '거래 내역 (Transaction History)'}
                         </h3>
-                        {activeTab === 'cash' && currentExchangeRate && (
+                        {(activeTab === 'cash' || activeTab === 'stock' || activeTab === 'pension') && currentExchangeRate && (
                             <div className="text-sm font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
                                 <span className="text-slate-400">USD/KRW:</span>
-                                <span className="text-[#0d7ff2]">{currentExchangeRate.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 원</span>
+                                <span className="text-[#0d7ff2] font-mono">{currentExchangeRate.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 원</span>
+                            </div>
+                        )}
+                        {activeTab === 'gold' && currentGoldPrice && (
+                            <div className="text-sm font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+                                <span className="text-slate-400">Gold Price / Don:</span>
+                                <span className="text-amber-600 font-mono">₩ {currentGoldPrice.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</span>
                             </div>
                         )}
                     </div>
@@ -725,6 +767,16 @@ export default function EntryPage() {
                                             <th className="px-4 py-3 font-semibold text-right">실투자금</th>
                                             <th className="px-4 py-3 font-semibold text-right">현재가</th>
                                             <th className="px-4 py-3 font-semibold text-right">수익</th>
+                                            <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
+                                        </tr>
+                                    ) : activeTab === 'gold' ? (
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold w-24">유형</th>
+                                            <th className="px-4 py-3 font-semibold w-24">날짜</th>
+                                            <th className="px-4 py-3 font-semibold min-w-[150px]">이름</th>
+                                            <th className="px-4 py-3 font-semibold text-right">매수 단가 (돈당)</th>
+                                            <th className="px-4 py-3 font-semibold text-right">수량 (돈)</th>
+                                            <th className="px-4 py-3 font-semibold text-right">총액</th>
                                             <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
                                         </tr>
                                     ) : (
@@ -828,6 +880,17 @@ export default function EntryPage() {
                                                             <td className={`px-4 py-3 font-bold text-center ${trx.action === 'buy' ? 'text-green-500' : 'text-[#ff4d4f]'}`}>
                                                                 {trx.action === 'buy' ? '증가' : '감소'}
                                                             </td>
+                                                        </>
+                                                    ) : activeTab === 'gold' ? (
+                                                        <>
+                                                            <td className={`px-4 py-3 font-bold ${trx.action === 'buy' ? 'text-red-500' : 'text-blue-500'}`}>
+                                                                {trx.action === 'buy' ? '매수' : '매도'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-slate-500">{trx.date}</td>
+                                                            <td className="px-4 py-3 text-slate-800 font-bold">{trx.name}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-600 font-mono">{formatCurrency(trx.price, 'KR')}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-600 font-mono">{trx.quantity.toLocaleString()} 돈</td>
+                                                            <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">{formatCurrency(trx.price * trx.quantity, 'KR')}</td>
                                                         </>
                                                     ) : (
                                                         // Original Table Row Rendering

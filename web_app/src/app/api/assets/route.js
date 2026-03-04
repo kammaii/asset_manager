@@ -74,6 +74,34 @@ export async function GET() {
                     deposit,
                     investmentCountry: asset.investmentCountry || asset.region || 'KR'
                 };
+            } else if (asset.type === 'gold') {
+                const fetchQuote = async (sym) => {
+                    const yf = new YahooFinance();
+                    return await yf.quote(sym);
+                };
+
+                try {
+                    // 'GC=F' is Gold Futures on Yahoo Finance (1 oz). 
+                    // 1 oz = 28.3495g. 1 don = 3.75g.
+                    // 1 oz = 28.3495 / 3.75 = 7.5598 don.
+                    // Price per don = (GC price * exchangeRate) / 7.5598
+                    const [goldQuote, krwQuote] = await Promise.all([
+                        fetchQuote('GC=F'),
+                        fetchQuote('KRW=X')
+                    ]);
+
+                    if (goldQuote && goldQuote.regularMarketPrice && krwQuote && krwQuote.regularMarketPrice) {
+                        const pricePerOz = goldQuote.regularMarketPrice;
+                        const exchangeRate = krwQuote.regularMarketPrice;
+                        const pricePerDon = (pricePerOz * exchangeRate) / 7.55986;
+                        currentPrice = pricePerDon;
+                        previousClose = (goldQuote.regularMarketPreviousClose * krwQuote.regularMarketPreviousClose) / 7.55986 || currentPrice;
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch gold price:', error.message);
+                    currentPrice = asset.goldCurrentPrice || asset.avgPrice;
+                    previousClose = currentPrice;
+                }
             } else if (asset.type === 'cash') {
                 if (asset.region === 'US') {
                     const fetchQuote = async (sym) => {
@@ -125,7 +153,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, investmentCountry } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -187,6 +215,8 @@ export async function POST(request) {
                 if (expense !== undefined) updateData.expense = parseFloat(expense) || 0;
                 if (deposit !== undefined) updateData.deposit = parseFloat(deposit) || 0;
                 if (realEstateCurrentPrice !== undefined) updateData.realEstateCurrentPrice = parseFloat(realEstateCurrentPrice) || 0;
+            } else if (type === 'gold') {
+                if (goldCurrentPrice !== undefined) updateData.goldCurrentPrice = parseFloat(goldCurrentPrice) || 0;
             }
             await updateDoc(assetDoc, updateData);
         } else {
@@ -210,6 +240,8 @@ export async function POST(request) {
                 newAssetData.expense = expense ? parseFloat(expense) : 0;
                 newAssetData.deposit = deposit ? parseFloat(deposit) : 0;
                 newAssetData.realEstateCurrentPrice = realEstateCurrentPrice ? parseFloat(realEstateCurrentPrice) : newAvgPrice;
+            } else if (type === 'gold') {
+                newAssetData.goldCurrentPrice = goldCurrentPrice ? parseFloat(goldCurrentPrice) : newAvgPrice;
             }
             const newDocRef = await addDoc(assetsRef, newAssetData);
             assetId = newDocRef.id;

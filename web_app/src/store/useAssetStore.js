@@ -253,12 +253,20 @@ const useAssetStore = create(
                 const realEstateProfit = realEstateAssets.reduce((sum, a) => sum + convert(a.profitGain || 0, a), 0);
                 const realEstateRate = realEstatePrincipal > 0 ? (realEstateProfit / realEstatePrincipal) * 100 : 0;
 
+                // gold
+                const goldAssets = assets.filter(a => a.type === 'gold');
+                const totalGold = goldAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+                const goldPrincipal = goldAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
+                const goldProfit = totalGold - goldPrincipal;
+                const goldRate = goldPrincipal > 0 ? (goldProfit / goldPrincipal) * 100 : 0;
+
                 return {
                     totalAssets, totalProfit, profitRate, dayChange,
                     totalStock, stockProfit, stockRate,
                     totalPension, pensionProfit, pensionRate,
                     totalCash, cashProfit, cashRate,
                     totalRealEstate, realEstateProfit, realEstateRate,
+                    totalGold, goldProfit, goldRate,
                 };
             },
         }),
