@@ -13,10 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create env file
+        run: echo "NEXT_PUBLIC_ALLOWED_EMAILS=${{ secrets.NEXT_PUBLIC_ALLOWED_EMAILS }}" > .env.production
+        working-directory: ./web_app
       - run: npm ci && npm run build
         working-directory: ./web_app
-        env:
-          NEXT_PUBLIC_ALLOWED_EMAILS: ${{ secrets.NEXT_PUBLIC_ALLOWED_EMAILS }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
