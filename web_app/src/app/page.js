@@ -475,11 +475,14 @@ export default function Dashboard() {
 
         {/* Portfolio Tables */}
         {['stock', 'pension', 'cash', 'real_estate', 'gold'].map(assetType => {
-          const filteredAssets = assets.filter(a => a.type === assetType).sort((a, b) => {
-            const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
-            const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
-            return valB - valA;
-          });
+          const filteredAssets = assets
+            .filter(a => a.type === assetType)
+            .filter(a => a.type === 'real_estate' ? true : (a.quantity || 0) > 0)
+            .sort((a, b) => {
+              const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
+              const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
+              return valB - valA;
+            });
           const title = assetType === 'stock' ? '주식' : assetType === 'pension' ? '연금' : assetType === 'real_estate' ? '부동산' : assetType === 'gold' ? '금(Gold)' : '현금';
 
           if (filteredAssets.length === 0 && assetType !== 'stock') return null; // Ensure at least stock table shows even if empty
