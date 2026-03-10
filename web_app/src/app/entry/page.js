@@ -459,10 +459,12 @@ export default function EntryPage() {
                     <nav className="hidden md:flex items-center gap-6">
                         <Link href="/" className="text-slate-500 text-sm font-medium hover:text-[#0d7ff2] transition-colors">대시보드</Link>
                         <span className="text-slate-900 text-sm font-semibold cursor-pointer">자산 입력</span>
-                        <Link href="/settings" className="text-slate-500 text-sm font-medium hover:text-[#0d7ff2] transition-colors">설정</Link>
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
+                    <Link href="/settings" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500" title="설정">
+                        <Settings size={22} />
+                    </Link>
                 </div>
             </header>
 

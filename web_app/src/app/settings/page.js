@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import useAssetStore from '@/store/useAssetStore';
 import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft } from 'lucide-react';
 
@@ -28,6 +29,7 @@ const COLOR_CLASSES = {
 
 export default function SettingsPage() {
     const { enabledAssetTypes, fetchSettings, updateSettings, loading } = useAssetStore();
+    const router = useRouter();
     const [localEnabled, setLocalEnabled] = useState([]);
     const [mounted, setMounted] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -62,7 +64,8 @@ export default function SettingsPage() {
         await updateSettings({ enabledAssetTypes: localEnabled });
         setSaving(false);
         setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        // 저장 후 바로 대시보드로 이동
+        router.push('/');
     };
 
     const hasChanges = JSON.stringify(localEnabled.sort()) !== JSON.stringify([...(enabledAssetTypes || [])].sort());
@@ -88,9 +91,13 @@ export default function SettingsPage() {
                     </div>
                     <nav className="hidden md:flex items-center gap-6">
                         <Link href="/" className="text-slate-500 text-sm font-medium hover:text-[#0d7ff2] transition-colors">대시보드</Link>
-                        <Link href="/entry" className="text-slate-500 text-sm font-medium hover:text-slate-900 transition-colors">자산 입력</Link>
-                        <span className="text-slate-900 text-sm font-semibold cursor-pointer">설정</span>
+                        <Link href="/entry" className="text-slate-500 text-sm font-medium hover:text-[#0d7ff2] transition-colors">자산 입력</Link>
                     </nav>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="p-2 bg-blue-50 rounded-full text-[#0d7ff2]" title="설정">
+                        <Settings size={22} />
+                    </div>
                 </div>
             </header>
 

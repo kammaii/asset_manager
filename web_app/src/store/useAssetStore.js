@@ -15,6 +15,7 @@ const useAssetStore = create(
             savedPensionItems: [],
             savedCryptoItems: [],
             enabledAssetTypes: ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'],
+            preferredIncludeMap: {}, // 대시보드 포함/불포함 설정값 (로컬 저장용)
             loading: false,
             error: null,
 
@@ -238,6 +239,10 @@ const useAssetStore = create(
                 }
             },
 
+            setPreferredIncludeMap: (includeMap) => {
+                set({ preferredIncludeMap: includeMap });
+            },
+
             getSummary: (exchangeRate = 1400) => {
                 const { assets } = get();
 
@@ -324,7 +329,8 @@ const useAssetStore = create(
                 savedStockItems: state.savedStockItems,
                 savedPensionItems: state.savedPensionItems,
                 savedCryptoItems: state.savedCryptoItems,
-                enabledAssetTypes: state.enabledAssetTypes
+                enabledAssetTypes: state.enabledAssetTypes,
+                preferredIncludeMap: state.preferredIncludeMap
             }),
         }
     )

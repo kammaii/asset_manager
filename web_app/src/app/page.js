@@ -30,10 +30,14 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
-  // 각 자산 유형의 포함 여부를 동적으로 관리
-  const [includeMap, setIncludeMap] = useState({});
+  // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
+  const includeMap = {};
+  (enabledAssetTypes || []).forEach(type => {
+    includeMap[type] = preferredIncludeMap?.[type] ?? true;
+  });
+
   const [currentExchangeRate, setCurrentExchangeRate] = useState(1400); // Default fallback
   const [drillDownCategory, setDrillDownCategory] = useState(null);
   const [mounted, setMounted] = useState(false);
@@ -63,27 +67,12 @@ export default function Dashboard() {
   // 자산 유형 정렬 순서 정의
   const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'];
 
-  // enabledAssetTypes가 로드되면 includeMap 초기화 및 정렬
-  useEffect(() => {
-    if (enabledAssetTypes && enabledAssetTypes.length > 0) {
-      // 선호 순서에 따라 정렬
-      const sortedTypes = [...enabledAssetTypes].sort((a, b) => {
-        return PREFERRED_ORDER.indexOf(a) - PREFERRED_ORDER.indexOf(b);
-      });
-
-      setIncludeMap(prev => {
-        const next = {};
-        sortedTypes.forEach(type => {
-          // 이미 값이 있으면 유지, 없으면 기본적으로 모두 true로 설정 (신규 유저 편의성)
-          next[type] = prev[type] !== undefined ? prev[type] : true;
-        });
-        return next;
-      });
-    }
-  }, [enabledAssetTypes]);
-
   const toggleInclude = (typeId) => {
-    setIncludeMap(prev => ({ ...prev, [typeId]: !prev[typeId] }));
+    const nextValue = !(preferredIncludeMap?.[typeId] ?? true);
+    setPreferredIncludeMap({
+      ...preferredIncludeMap,
+      [typeId]: nextValue
+    });
   };
 
   const summary = getSummary(currentExchangeRate);
@@ -218,10 +207,12 @@ export default function Dashboard() {
           <nav className="hidden md:flex items-center gap-6">
             <span className="text-slate-900 text-sm font-semibold hover:text-[#0d7ff2] transition-colors cursor-pointer">대시보드</span>
             <Link href="/entry" className="text-slate-500 text-sm font-medium hover:text-slate-900 transition-colors">자산 입력</Link>
-            <Link href="/settings" className="text-slate-500 text-sm font-medium hover:text-slate-900 transition-colors">설정</Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">
+          <Link href="/settings" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500" title="설정">
+            <Settings size={22} />
+          </Link>
         </div>
       </header>
 
