@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore/lite';
+import { collection, getDocs, doc, setDoc, query, orderBy, limit } from 'firebase/firestore/lite';
 import { default as YahooFinance } from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic'; // Prevent Next.js from caching API routes
@@ -12,120 +12,18 @@ export async function GET(request) {
 
         // Use Korean timezone (Asia/Seoul)
         const currentDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1;
-        const currentDay = currentDate.getDate();
-        const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
-        const currentDayStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
 
-        // 1. Calculate current month's totals using real-time Yahoo Finance prices and current assets
-        const assetsSnap = await getDocs(collection(db, 'assets'));
-
-        let exchangeRate = 1400;
-        try {
-            const yf = new YahooFinance();
-            const quote = await yf.quote('KRW=X');
-            if (quote && quote.regularMarketPrice) {
-                exchangeRate = quote.regularMarketPrice;
-            }
-        } catch (e) {
-            console.error('Failed to fetch exchange rate for history:', e);
-        }
-
-        const balances = {
-            stock: 0,
-            pension: 0,
-            cash: 0,
-            real_estate: 0,
-            gold: 0,
-            crypto: 0,
-            car: 0
-        };
-
-        await Promise.all(assetsSnap.docs.map(async (docSnap) => {
-            const asset = docSnap.data();
-            if (asset.type === 'real_estate') {
-                const currentPrice = asset.realEstateCurrentPrice || asset.avgPrice || 0;
-                const value = (currentPrice - (asset.deposit || 0)) * (asset.region === 'US' ? exchangeRate : 1);
-                balances['real_estate'] = (balances['real_estate'] || 0) + value;
-                return;
-            } else if (asset.type === 'gold') {
-                const currentPrice = asset.goldCurrentPrice || asset.avgPrice || 0;
-                const value = asset.quantity * currentPrice * (asset.region === 'US' ? exchangeRate : 1);
-                balances['gold'] = (balances['gold'] || 0) + value;
-                return;
-            }
-
-            let currentPrice = asset.avgPrice || 0;
-
-            if ((asset.type === 'stock' || asset.type === 'pension' || asset.type === 'crypto') && asset.symbol) {
-                let querySymbol = asset.symbol;
-                if (asset.type === 'crypto') {
-                    // 가상화폐 티커 처리 (예: BTC -> BTC-USD 또는 BTC-KRW)
-                    if (!querySymbol.includes('-') && !querySymbol.includes('=')) {
-                        querySymbol = querySymbol + (asset.region === 'US' ? '-USD' : '-KRW');
-                    }
-                } else if (asset.region === 'KR' && !querySymbol.includes('.')) {
-                    querySymbol = querySymbol + '.KS';
-                }
-
-                const fetchQuote = async (sym) => {
-                    const yf = new YahooFinance();
-                    return await yf.quote(sym);
-                };
-
-                try {
-                    const quote = await fetchQuote(querySymbol);
-                    if (quote && quote.regularMarketPrice) {
-                        currentPrice = quote.regularMarketPrice;
-                    }
-                } catch (error) {
-                    if (asset.region === 'KR' && querySymbol.endsWith('.KS')) {
-                        try {
-                            const quote = await fetchQuote(asset.symbol + '.KQ');
-                            if (quote && quote.regularMarketPrice) {
-                                currentPrice = quote.regularMarketPrice;
-                            }
-                        } catch (e) { }
-                    }
-                }
-            } else if (asset.type === 'cash') {
-                currentPrice = 1;
-            }
-
-            const value = asset.quantity * currentPrice * (asset.region === 'US' ? exchangeRate : 1);
-            balances[asset.type] = (balances[asset.type] || 0) + value;
-        }));
-
-        const totalValue = Object.values(balances).reduce((sum, val) => sum + (val || 0), 0);
-
-        const currentBaseSnapshot = {
-            stockValue: balances.stock || 0,
-            cashValue: balances.cash || 0,
-            pensionValue: balances.pension || 0,
-            realEstateValue: balances.real_estate || 0,
-            goldValue: balances.gold || 0,
-            cryptoValue: balances.crypto || 0,
-            carValue: balances.car || 0,
-            totalValue: totalValue,
-            updatedAt: new Date().toISOString()
-        };
-
-        const currentMonthlySnapshot = { ...currentBaseSnapshot, month: currentMonthStr };
-        const currentDailySnapshot = { ...currentBaseSnapshot, date: currentDayStr };
-
-        // 2. Save current snapshot to Firestore (Upsert)
-        await setDoc(doc(db, 'monthly_snapshots', currentMonthStr), currentMonthlySnapshot);
-        await setDoc(doc(db, 'daily_snapshots', currentDayStr), currentDailySnapshot);
-
-        // 3. Fetch snapshots and backfill if necessary
+        // Fetch snapshots and backfill if necessary
         if (type === 'daily') {
-            const snapshotsSnap = await getDocs(collection(db, 'daily_snapshots'));
+            const snapshotsRef = collection(db, 'daily_snapshots');
+            const q = query(snapshotsRef, orderBy('date', 'desc'), limit(40));
+            const snapshotsSnap = await getDocs(q);
             let data = snapshotsSnap.docs.map(docSnap => docSnap.data());
+            // Reverse for ascending order (needed for backfill loop)
             data.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
             if (data.length === 0) {
-                return NextResponse.json([currentDailySnapshot]);
+                return NextResponse.json([]);
             }
 
             // Backfill missing days
@@ -133,6 +31,8 @@ export async function GET(request) {
             const startDate = new Date(data[0].date);
             startDate.setHours(12, 0, 0, 0); // Avoid timezone issues
             const endDate = new Date(currentDate);
+            // End date is yesterday to not write today, frontend attaches today
+            endDate.setDate(endDate.getDate() - 1);
             endDate.setHours(12, 0, 0, 0);
 
             let dataIdx = 0;
@@ -144,7 +44,6 @@ export async function GET(request) {
                 const dDay = String(d.getDate()).padStart(2, '0');
                 const dateStr = `${dYear}-${dMonth}-${dDay}`;
 
-                // Fast-forward lastSnap to the latest available snapshot on or before dateStr
                 while (dataIdx < data.length && data[dataIdx].date < dateStr) {
                     lastSnap = data[dataIdx];
                     dataIdx++;
@@ -158,19 +57,18 @@ export async function GET(request) {
                 backfilled.push({ ...lastSnap, date: dateStr });
             }
 
-            return NextResponse.json(backfilled);
+            return NextResponse.json(backfilled.length > 0 ? backfilled : data);
         } else {
-            const snapshotsSnap = await getDocs(collection(db, 'monthly_snapshots'));
+            const snapshotsRef = collection(db, 'monthly_snapshots');
+            const q = query(snapshotsRef, orderBy('month', 'desc'), limit(24)); // Last 2 years
+            const snapshotsSnap = await getDocs(q);
             let historyData = snapshotsSnap.docs.map(docSnap => docSnap.data());
             historyData.sort((a, b) => (a.month || '').localeCompare(b.month || ''));
 
-            if (historyData.length === 0) {
-                historyData = [currentMonthlySnapshot];
-            }
             return NextResponse.json(historyData);
         }
     } catch (error) {
         console.error('Error fetching/updating snapshots for history API:', error);
-        return NextResponse.json({ error: 'Failed to calculate history' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 });
     }
 }

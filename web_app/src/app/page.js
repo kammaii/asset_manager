@@ -160,19 +160,52 @@ export default function Dashboard() {
     drillDownTotal = items.reduce((sum, item) => sum + item.value, 0);
   }
 
+  const currentDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const todayDateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+  const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+  const currentSummaryData = {
+    stockValue: summary.totalStock || 0,
+    cashValue: summary.totalCash || 0,
+    pensionValue: summary.totalPension || 0,
+    realEstateValue: summary.totalRealEstate || 0,
+    goldValue: summary.totalGold || 0,
+    cryptoValue: summary.totalCrypto || 0,
+    carValue: summary.totalCar || 0,
+    totalValue: displayTotalAssets
+  };
+
+  let processedDailyHistory = [...(dailyHistory || [])];
+  if (processedDailyHistory.length > 0 && processedDailyHistory[processedDailyHistory.length - 1].date !== todayDateStr) {
+    processedDailyHistory.push({ ...currentSummaryData, date: todayDateStr });
+  } else if (processedDailyHistory.length > 0) {
+    processedDailyHistory[processedDailyHistory.length - 1] = { ...currentSummaryData, date: todayDateStr };
+  } else if (!loading) {
+    processedDailyHistory = [{ ...currentSummaryData, date: todayDateStr }];
+  }
+
+  let processedMonthlyHistory = [...(history || [])];
+  if (processedMonthlyHistory.length > 0 && processedMonthlyHistory[processedMonthlyHistory.length - 1].month !== currentMonthStr) {
+    processedMonthlyHistory.push({ ...currentSummaryData, month: currentMonthStr });
+  } else if (processedMonthlyHistory.length > 0) {
+    processedMonthlyHistory[processedMonthlyHistory.length - 1] = { ...currentSummaryData, month: currentMonthStr };
+  } else if (!loading) {
+    processedMonthlyHistory = [{ ...currentSummaryData, month: currentMonthStr }];
+  }
+
   let chartHistory = [];
   if (filter === 'DAILY') {
-    chartHistory = dailyHistory?.length > 0 ? dailyHistory.slice(-30).map(d => ({
+    chartHistory = processedDailyHistory?.length > 0 ? processedDailyHistory.slice(-30).map(d => ({
       ...d,
       displayLabel: d.date ? d.date.substring(5) : '', // MM-DD
     })) : [];
   } else if (filter === 'MONTHLY') {
-    chartHistory = history?.length > 0 ? history.slice(-12).map(m => ({
+    chartHistory = processedMonthlyHistory?.length > 0 ? processedMonthlyHistory.slice(-12).map(m => ({
       ...m,
       displayLabel: m.month ? `${m.month.split('-')[0].slice(2)}.${m.month.split('-')[1]}` : '', // YY.MM
     })) : [];
   } else {
-    chartHistory = history?.length > 0 ? history.map(m => ({
+    chartHistory = processedMonthlyHistory?.length > 0 ? processedMonthlyHistory.map(m => ({
       ...m,
       displayLabel: m.month ? `${m.month.split('-')[0].slice(2)}.${m.month.split('-')[1]}` : '', // YY.MM
     })) : [];

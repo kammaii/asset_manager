@@ -19,15 +19,21 @@ export async function GET(request) {
       trxQuery = query(trxRef, orderBy('date', 'desc'));
     }
 
-    const [assetsSnap, trxSnap] = await Promise.all([
-      getDocs(assetsRef),
-      getDocs(trxQuery)
-    ]);
+    const trxSnap = await getDocs(trxQuery);
+
+    const neededAssetIds = new Set();
+    trxSnap.docs.forEach(doc => {
+      if (!doc.data().type) neededAssetIds.add(doc.data().asset_id);
+    });
 
     const assetsMap = {};
-    assetsSnap.forEach(doc => {
-      assetsMap[doc.id] = doc.data();
-    });
+    // Backward compatibility: Only load all assets if there are old transactions missing 'type'
+    if (neededAssetIds.size > 0) {
+      const assetsSnap = await getDocs(assetsRef);
+      assetsSnap.forEach(doc => {
+        assetsMap[doc.id] = doc.data();
+      });
+    }
 
     const transactions = trxSnap.docs.map(doc => {
       const data = doc.data();
@@ -46,11 +52,11 @@ export async function GET(request) {
         price: data.price,
         account: data.account || asset.account || '일반',
         createdAt: createdAt,
-        type: asset.type,
-        region: asset.region,
-        investmentCountry: asset.investmentCountry || asset.region || 'KR',
-        symbol: asset.symbol,
-        name: asset.name,
+        type: data.type || asset.type,
+        region: data.region || asset.region,
+        investmentCountry: data.investmentCountry || asset.investmentCountry || data.region || asset.region || 'KR',
+        symbol: data.symbol !== undefined ? data.symbol : asset.symbol,
+        name: data.name || asset.name,
         asset_id: data.asset_id
       };
     });

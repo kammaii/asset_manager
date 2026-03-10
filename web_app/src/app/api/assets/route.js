@@ -5,6 +5,21 @@ import { default as YahooFinance } from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic';
 
+// In-memory cache for Yahoo Finance API responses
+let priceCache = {};
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const getCachedQuote = async (symbol) => {
+    const now = Date.now();
+    if (priceCache[symbol] && priceCache[symbol].timestamp > now - CACHE_TTL_MS) {
+        return priceCache[symbol].data;
+    }
+    const yf = new YahooFinance();
+    const data = await yf.quote(symbol);
+    priceCache[symbol] = { data, timestamp: now };
+    return data;
+};
+
 export async function GET() {
     try {
         const assetsRef = collection(db, 'assets');
@@ -22,13 +37,8 @@ export async function GET() {
                     querySymbol = querySymbol + '.KS'; // default to KOSPI
                 }
 
-                const fetchQuote = async (sym) => {
-                    const yf = new YahooFinance();
-                    return await yf.quote(sym);
-                };
-
                 try {
-                    const quote = await fetchQuote(querySymbol);
+                    const quote = await getCachedQuote(querySymbol);
                     if (quote && quote.regularMarketPrice) {
                         currentPrice = quote.regularMarketPrice;
                         previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -38,7 +48,7 @@ export async function GET() {
                     // Try KOSDAQ if KOSPI failed
                     if (asset.region === 'KR' && querySymbol.endsWith('.KS')) {
                         try {
-                            const quote = await fetchQuote(asset.symbol + '.KQ');
+                            const quote = await getCachedQuote(asset.symbol + '.KQ');
                             if (quote && quote.regularMarketPrice) {
                                 currentPrice = quote.regularMarketPrice;
                                 previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -53,12 +63,9 @@ export async function GET() {
                 if (!querySymbol.includes('-') && !querySymbol.includes('=')) {
                     querySymbol = querySymbol + (asset.region === 'US' ? '-USD' : '-KRW');
                 }
-                const fetchQuote = async (sym) => {
-                    const yf = new YahooFinance();
-                    return await yf.quote(sym);
-                };
+
                 try {
-                    const quote = await fetchQuote(querySymbol);
+                    const quote = await getCachedQuote(querySymbol);
                     if (quote && quote.regularMarketPrice) {
                         currentPrice = quote.regularMarketPrice;
                         previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -69,8 +76,8 @@ export async function GET() {
                         try {
                             const fallbackQuery = asset.symbol + '-USD';
                             const [quote, krwQuote] = await Promise.all([
-                                fetchQuote(fallbackQuery),
-                                fetchQuote('KRW=X')
+                                getCachedQuote(fallbackQuery),
+                                getCachedQuote('KRW=X')
                             ]);
                             if (quote && quote.regularMarketPrice && krwQuote && krwQuote.regularMarketPrice) {
                                 currentPrice = quote.regularMarketPrice * krwQuote.regularMarketPrice;
@@ -106,27 +113,18 @@ export async function GET() {
                     investmentCountry: asset.investmentCountry || asset.region || 'KR'
                 };
             } else if (asset.type === 'gold') {
-                const fetchQuote = async (sym) => {
-                    const yf = new YahooFinance();
-                    return await yf.quote(sym);
-                };
-
                 try {
-                    // 'GC=F' is Gold Futures on Yahoo Finance (1 oz). 
-                    // 1 oz = 28.3495g. 1 don = 3.75g.
-                    // 1 oz = 28.3495 / 3.75 = 7.5598 don.
-                    // Price per don = (GC price * exchangeRate) / 7.5598
                     const [goldQuote, krwQuote] = await Promise.all([
-                        fetchQuote('GC=F'),
-                        fetchQuote('KRW=X')
+                        getCachedQuote('GC=F'),
+                        getCachedQuote('KRW=X')
                     ]);
 
                     if (goldQuote && goldQuote.regularMarketPrice && krwQuote && krwQuote.regularMarketPrice) {
                         const pricePerOz = goldQuote.regularMarketPrice;
                         const exchangeRate = krwQuote.regularMarketPrice;
-                        const pricePerDon = (pricePerOz * exchangeRate) / 7.55986;
+                        const pricePerDon = (pricePerOz * exchangeRate) / 8.29426;
                         currentPrice = pricePerDon;
-                        previousClose = (goldQuote.regularMarketPreviousClose * krwQuote.regularMarketPreviousClose) / 7.55986 || currentPrice;
+                        previousClose = (goldQuote.regularMarketPreviousClose * krwQuote.regularMarketPreviousClose) / 8.29426 || currentPrice;
                     }
                 } catch (error) {
                     console.error('Failed to fetch gold price:', error.message);
@@ -135,13 +133,8 @@ export async function GET() {
                 }
             } else if (asset.type === 'cash') {
                 if (asset.region === 'US') {
-                    const fetchQuote = async (sym) => {
-                        const yf = new YahooFinance();
-                        return await yf.quote(sym);
-                    };
-
                     try {
-                        const quote = await fetchQuote('KRW=X');
+                        const quote = await getCachedQuote('KRW=X');
                         if (quote && quote.regularMarketPrice) {
                             currentPrice = quote.regularMarketPrice;
                             previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -278,7 +271,7 @@ export async function POST(request) {
             assetId = newDocRef.id;
         }
 
-        // Insert transaction record
+        // Insert transaction record with denormalized asset info
         const trxRef = collection(db, 'transactions');
         await addDoc(trxRef, {
             asset_id: assetId,
@@ -288,6 +281,10 @@ export async function POST(request) {
             price: prc,
             region: region || 'KR',
             investmentCountry: investmentCountry || region || 'KR',
+            type,
+            name,
+            symbol: symbol || '',
+            account: account || '일반',
             createdAt: serverTimestamp()
         });
 
