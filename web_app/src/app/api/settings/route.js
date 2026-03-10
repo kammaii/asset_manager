@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { accountTypes, cashInstitutions } = body;
+        const { accountTypes, cashInstitutions, savedStockItems, savedPensionItems, savedCryptoItems, enabledAssetTypes } = body;
 
         const docRef = doc(db, 'settings', 'general');
 
@@ -35,6 +35,10 @@ export async function POST(request) {
         const updateData = {};
         if (accountTypes !== undefined) updateData.accountTypes = accountTypes;
         if (cashInstitutions !== undefined) updateData.cashInstitutions = cashInstitutions;
+        if (savedStockItems !== undefined) updateData.savedStockItems = savedStockItems;
+        if (savedPensionItems !== undefined) updateData.savedPensionItems = savedPensionItems;
+        if (savedCryptoItems !== undefined) updateData.savedCryptoItems = savedCryptoItems;
+        if (enabledAssetTypes !== undefined) updateData.enabledAssetTypes = enabledAssetTypes;
 
         await setDoc(docRef, updateData, { merge: true });
 

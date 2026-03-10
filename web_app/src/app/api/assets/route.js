@@ -48,6 +48,37 @@ export async function GET() {
                         }
                     }
                 }
+            } else if (asset.type === 'crypto' && asset.symbol) {
+                let querySymbol = asset.symbol;
+                if (!querySymbol.includes('-') && !querySymbol.includes('=')) {
+                    querySymbol = querySymbol + (asset.region === 'US' ? '-USD' : '-KRW');
+                }
+                const fetchQuote = async (sym) => {
+                    const yf = new YahooFinance();
+                    return await yf.quote(sym);
+                };
+                try {
+                    const quote = await fetchQuote(querySymbol);
+                    if (quote && quote.regularMarketPrice) {
+                        currentPrice = quote.regularMarketPrice;
+                        previousClose = quote.regularMarketPreviousClose || currentPrice;
+                    }
+                } catch (error) {
+                    console.error(`Failed to fetch crypto price for ${querySymbol}:`, error.message);
+                    if (asset.region !== 'US' && querySymbol.endsWith('-KRW')) {
+                        try {
+                            const fallbackQuery = asset.symbol + '-USD';
+                            const [quote, krwQuote] = await Promise.all([
+                                fetchQuote(fallbackQuery),
+                                fetchQuote('KRW=X')
+                            ]);
+                            if (quote && quote.regularMarketPrice && krwQuote && krwQuote.regularMarketPrice) {
+                                currentPrice = quote.regularMarketPrice * krwQuote.regularMarketPrice;
+                                previousClose = (quote.regularMarketPreviousClose || quote.regularMarketPrice) * (krwQuote.regularMarketPreviousClose || krwQuote.regularMarketPrice);
+                            }
+                        } catch (e) { }
+                    }
+                }
             } else if (asset.type === 'real_estate') {
                 const expense = asset.expense || 0;
                 const deposit = asset.deposit || 0;

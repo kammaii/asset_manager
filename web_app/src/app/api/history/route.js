@@ -37,7 +37,9 @@ export async function GET(request) {
             pension: 0,
             cash: 0,
             real_estate: 0,
-            gold: 0
+            gold: 0,
+            crypto: 0,
+            car: 0
         };
 
         await Promise.all(assetsSnap.docs.map(async (docSnap) => {
@@ -56,9 +58,14 @@ export async function GET(request) {
 
             let currentPrice = asset.avgPrice || 0;
 
-            if ((asset.type === 'stock' || asset.type === 'pension') && asset.symbol) {
+            if ((asset.type === 'stock' || asset.type === 'pension' || asset.type === 'crypto') && asset.symbol) {
                 let querySymbol = asset.symbol;
-                if (asset.region === 'KR' && !querySymbol.includes('.')) {
+                if (asset.type === 'crypto') {
+                    // 가상화폐 티커 처리 (예: BTC -> BTC-USD 또는 BTC-KRW)
+                    if (!querySymbol.includes('-') && !querySymbol.includes('=')) {
+                        querySymbol = querySymbol + (asset.region === 'US' ? '-USD' : '-KRW');
+                    }
+                } else if (asset.region === 'KR' && !querySymbol.includes('.')) {
                     querySymbol = querySymbol + '.KS';
                 }
 
@@ -90,7 +97,7 @@ export async function GET(request) {
             balances[asset.type] = (balances[asset.type] || 0) + value;
         }));
 
-        const totalValue = (balances.stock || 0) + (balances.cash || 0) + (balances.pension || 0) + (balances.real_estate || 0) + (balances.gold || 0);
+        const totalValue = Object.values(balances).reduce((sum, val) => sum + (val || 0), 0);
 
         const currentBaseSnapshot = {
             stockValue: balances.stock || 0,
@@ -98,6 +105,8 @@ export async function GET(request) {
             pensionValue: balances.pension || 0,
             realEstateValue: balances.real_estate || 0,
             goldValue: balances.gold || 0,
+            cryptoValue: balances.crypto || 0,
+            carValue: balances.car || 0,
             totalValue: totalValue,
             updatedAt: new Date().toISOString()
         };
