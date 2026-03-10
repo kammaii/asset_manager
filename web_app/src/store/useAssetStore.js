@@ -208,8 +208,10 @@ const useAssetStore = create(
                         enabledAssetTypes: (() => {
                             let types = data.enabledAssetTypes || ['stock', 'pension', 'cash', 'real_estate', 'gold', 'crypto', 'car'];
                             // Force append crypto and car if they are entirely missing from a legacy user's config
-                            if (!types.includes('crypto')) types.push('crypto');
-                            if (!types.includes('car')) types.push('car');
+                            if (!data.hasMigratedV2) {
+                                if (!types.includes('crypto')) types.push('crypto');
+                                if (!types.includes('car')) types.push('car');
+                            }
                             return [...new Set(types)];
                         })(),
                     });
@@ -220,13 +222,14 @@ const useAssetStore = create(
 
             updateSettings: async (newSettings) => {
                 try {
+                    const settingsToSave = { ...newSettings, hasMigratedV2: true };
                     // Optimistically update local state
-                    set((state) => ({ ...state, ...newSettings }));
+                    set((state) => ({ ...state, ...settingsToSave }));
 
                     const res = await fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(newSettings),
+                        body: JSON.stringify(settingsToSave),
                     });
                     if (!res.ok) throw new Error('Failed to update settings');
                 } catch (error) {
