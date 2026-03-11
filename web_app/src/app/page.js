@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [currentExchangeRate, setCurrentExchangeRate] = useState(1400); // Default fallback
   const [drillDownCategory, setDrillDownCategory] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [actionMenu, setActionMenu] = useState({ visible: false, x: 0, y: 0, asset: null, assetType: null });
 
   useEffect(() => {
     setMounted(true);
@@ -63,6 +64,27 @@ export default function Dashboard() {
     };
     fetchRate();
   }, [fetchAssets, fetchTransactions, fetchHistory, fetchSettings]);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (actionMenu.visible) setActionMenu(prev => ({ ...prev, visible: false }));
+    };
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [actionMenu.visible]);
+
+  const handleRowClick = (e, asset, assetType) => {
+    if (['stock', 'crypto', 'pension'].includes(assetType)) {
+      e.stopPropagation();
+      setActionMenu({
+        visible: true,
+        x: e.pageX,
+        y: e.pageY,
+        asset,
+        assetType
+      });
+    }
+  };
 
   // 자산 유형 정렬 순서 정의
   const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'];
@@ -538,7 +560,11 @@ export default function Dashboard() {
                       </tr>
                     ) : (
                       filteredAssets.map((asset) => (
-                        <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                        <tr
+                          key={asset.id}
+                          className={`hover:bg-slate-50 transition-colors ${['stock', 'crypto', 'pension'].includes(assetType) ? 'cursor-pointer' : ''}`}
+                          onClick={(e) => handleRowClick(e, asset, assetType)}
+                        >
                           {assetType === 'cash' ? (
                             <>
                               <td className="p-4 font-bold text-slate-900">{asset.name}</td>
@@ -664,6 +690,28 @@ export default function Dashboard() {
           );
         })}
       </main>
+
+      {/* Floating Action Menu */}
+      {actionMenu.visible && actionMenu.asset && (
+        <div
+          className="absolute z-[100] bg-white rounded-lg shadow-xl border border-slate-200 p-2 flex gap-2"
+          style={{ top: actionMenu.y, left: actionMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Link
+            href={`/entry?tab=${actionMenu.assetType}&action=buy&name=${encodeURIComponent(actionMenu.asset.name)}&symbol=${encodeURIComponent(actionMenu.asset.symbol || '')}&region=${actionMenu.asset.region || 'KR'}&investmentCountry=${actionMenu.asset.investmentCountry || actionMenu.asset.region || 'KR'}&account=${encodeURIComponent(actionMenu.asset.account || '일반')}`}
+            className="px-4 py-2 text-sm font-bold rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+          >
+            매수
+          </Link>
+          <Link
+            href={`/entry?tab=${actionMenu.assetType}&action=sell&name=${encodeURIComponent(actionMenu.asset.name)}&symbol=${encodeURIComponent(actionMenu.asset.symbol || '')}&region=${actionMenu.asset.region || 'KR'}&investmentCountry=${actionMenu.asset.investmentCountry || actionMenu.asset.region || 'KR'}&account=${encodeURIComponent(actionMenu.asset.account || '일반')}`}
+            className="px-4 py-2 text-sm font-bold rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+          >
+            매도
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

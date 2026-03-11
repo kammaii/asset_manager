@@ -102,16 +102,38 @@ export default function EntryPage() {
         }
     }, [enabledAssetTypes, activeTab]);
 
-    // Reset form when tab changes
+    // Reset form when tab changes (or when component finishes mounting to ensure URL is synced)
     useEffect(() => {
+        if (!mounted) return;
+
+        let paramAction = null, paramRegion = null, paramInvestmentCountry = null;
+        let paramAccount = null, paramSymbol = null, paramName = null;
+        let paramTab = null;
+        let hasActionOrName = false;
+
+        if (typeof window !== 'undefined' && window.location.search) {
+            const urlParams = new URLSearchParams(window.location.search);
+            paramTab = urlParams.get('tab');
+            paramAction = urlParams.get('action');
+            paramRegion = urlParams.get('region');
+            paramInvestmentCountry = urlParams.get('investmentCountry');
+            paramAccount = urlParams.get('account');
+            paramSymbol = urlParams.get('symbol');
+            paramName = urlParams.get('name');
+            hasActionOrName = !!(paramAction || paramName);
+        }
+
+        const isMatchingTab = paramTab === activeTab;
+        const shouldUseParams = isMatchingTab && hasActionOrName;
+
         setFormData({
-            action: 'buy',
+            action: shouldUseParams && paramAction ? paramAction : 'buy',
             date: new Date().toISOString().split('T')[0],
-            region: 'KR',
-            investmentCountry: 'KR',
-            account: '일반',
-            symbol: '',
-            name: '',
+            region: shouldUseParams && paramRegion ? paramRegion : 'KR',
+            investmentCountry: shouldUseParams && paramInvestmentCountry ? paramInvestmentCountry : 'KR',
+            account: shouldUseParams && paramAccount ? paramAccount : '일반',
+            symbol: shouldUseParams && paramSymbol ? paramSymbol : '',
+            name: shouldUseParams && paramName ? paramName : '',
             quantity: '',
             price: '',
             expense: '',
@@ -120,7 +142,12 @@ export default function EntryPage() {
         });
         setEditingId(null);
         setVisibleCount(10);
-    }, [activeTab]);
+
+        if (typeof window !== 'undefined' && shouldUseParams) {
+            // Clean URL after applying params so manual tab clicks don't carry them over
+            window.history.replaceState({}, '', `/entry?tab=${activeTab}`);
+        }
+    }, [activeTab, mounted]);
 
     const addInstitution = async () => {
         if (newInstitution.trim() && !cashInstitutions.includes(newInstitution.trim())) {
@@ -501,7 +528,12 @@ export default function EntryPage() {
                                     return (
                                         <button
                                             key={typeId}
-                                            onClick={() => setActiveTab(typeId)}
+                                            onClick={() => {
+                                                if (typeof window !== 'undefined') {
+                                                    window.history.replaceState({}, '', `/entry?tab=${typeId}`);
+                                                }
+                                                setActiveTab(typeId);
+                                            }}
                                             className={`flex items-center gap-2 pb-3 pt-4 px-2 border-b-[3px] transition-all whitespace-nowrap ${activeTab === typeId ? 'border-[#0d7ff2] text-[#0d7ff2]' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'}`}
                                         >
                                             <meta.icon size={20} />
