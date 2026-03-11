@@ -147,7 +147,11 @@ export async function PUT(request, { params }) {
             action: action || tx.action,
             asset_id: newAssetId,
             region: queryRegion,
-            investmentCountry: queryInvestmentCountry
+            investmentCountry: queryInvestmentCountry,
+            type: type || tx.type,
+            name: name || tx.name,
+            symbol: querySymbol,
+            account: account || tx.account || '일반'
         });
 
         if (oldAssetId !== newAssetId) {

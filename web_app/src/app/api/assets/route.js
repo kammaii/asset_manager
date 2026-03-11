@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
+import { collection, getDocs, getDoc, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
 import { default as YahooFinance } from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic';
+
+// In-memory cache for Yahoo Finance API responses
+let priceCache = {};
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const getCachedQuote = async (symbol) => {
+    const now = Date.now();
+    if (priceCache[symbol] && priceCache[symbol].timestamp > now - CACHE_TTL_MS) {
+        return priceCache[symbol].data;
+    }
+    const yf = new YahooFinance();
+    const data = await yf.quote(symbol);
+    priceCache[symbol] = { data, timestamp: now };
+    return data;
+};
 
 export async function GET() {
     try {
@@ -22,13 +37,8 @@ export async function GET() {
                     querySymbol = querySymbol + '.KS'; // default to KOSPI
                 }
 
-                const fetchQuote = async (sym) => {
-                    const yf = new YahooFinance();
-                    return await yf.quote(sym);
-                };
-
                 try {
-                    const quote = await fetchQuote(querySymbol);
+                    const quote = await getCachedQuote(querySymbol);
                     if (quote && quote.regularMarketPrice) {
                         currentPrice = quote.regularMarketPrice;
                         previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -38,7 +48,7 @@ export async function GET() {
                     // Try KOSDAQ if KOSPI failed
                     if (asset.region === 'KR' && querySymbol.endsWith('.KS')) {
                         try {
-                            const quote = await fetchQuote(asset.symbol + '.KQ');
+                            const quote = await getCachedQuote(asset.symbol + '.KQ');
                             if (quote && quote.regularMarketPrice) {
                                 currentPrice = quote.regularMarketPrice;
                                 previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -46,6 +56,34 @@ export async function GET() {
                         } catch (e) {
                             console.error(`Failed alternate fetch for ${asset.symbol}.KQ:`, e.message);
                         }
+                    }
+                }
+            } else if (asset.type === 'crypto' && asset.symbol) {
+                let querySymbol = asset.symbol;
+                if (!querySymbol.includes('-') && !querySymbol.includes('=')) {
+                    querySymbol = querySymbol + (asset.region === 'US' ? '-USD' : '-KRW');
+                }
+
+                try {
+                    const quote = await getCachedQuote(querySymbol);
+                    if (quote && quote.regularMarketPrice) {
+                        currentPrice = quote.regularMarketPrice;
+                        previousClose = quote.regularMarketPreviousClose || currentPrice;
+                    }
+                } catch (error) {
+                    console.error(`Failed to fetch crypto price for ${querySymbol}:`, error.message);
+                    if (asset.region !== 'US' && querySymbol.endsWith('-KRW')) {
+                        try {
+                            const fallbackQuery = asset.symbol + '-USD';
+                            const [quote, krwQuote] = await Promise.all([
+                                getCachedQuote(fallbackQuery),
+                                getCachedQuote('KRW=X')
+                            ]);
+                            if (quote && quote.regularMarketPrice && krwQuote && krwQuote.regularMarketPrice) {
+                                currentPrice = quote.regularMarketPrice * krwQuote.regularMarketPrice;
+                                previousClose = (quote.regularMarketPreviousClose || quote.regularMarketPrice) * (krwQuote.regularMarketPreviousClose || krwQuote.regularMarketPrice);
+                            }
+                        } catch (e) { }
                     }
                 }
             } else if (asset.type === 'real_estate') {
@@ -75,27 +113,18 @@ export async function GET() {
                     investmentCountry: asset.investmentCountry || asset.region || 'KR'
                 };
             } else if (asset.type === 'gold') {
-                const fetchQuote = async (sym) => {
-                    const yf = new YahooFinance();
-                    return await yf.quote(sym);
-                };
-
                 try {
-                    // 'GC=F' is Gold Futures on Yahoo Finance (1 oz). 
-                    // 1 oz = 28.3495g. 1 don = 3.75g.
-                    // 1 oz = 28.3495 / 3.75 = 7.5598 don.
-                    // Price per don = (GC price * exchangeRate) / 7.5598
                     const [goldQuote, krwQuote] = await Promise.all([
-                        fetchQuote('GC=F'),
-                        fetchQuote('KRW=X')
+                        getCachedQuote('GC=F'),
+                        getCachedQuote('KRW=X')
                     ]);
 
                     if (goldQuote && goldQuote.regularMarketPrice && krwQuote && krwQuote.regularMarketPrice) {
                         const pricePerOz = goldQuote.regularMarketPrice;
                         const exchangeRate = krwQuote.regularMarketPrice;
-                        const pricePerDon = (pricePerOz * exchangeRate) / 7.55986;
+                        const pricePerDon = (pricePerOz * exchangeRate) / 8.29426;
                         currentPrice = pricePerDon;
-                        previousClose = (goldQuote.regularMarketPreviousClose * krwQuote.regularMarketPreviousClose) / 7.55986 || currentPrice;
+                        previousClose = (goldQuote.regularMarketPreviousClose * krwQuote.regularMarketPreviousClose) / 8.29426 || currentPrice;
                     }
                 } catch (error) {
                     console.error('Failed to fetch gold price:', error.message);
@@ -104,13 +133,8 @@ export async function GET() {
                 }
             } else if (asset.type === 'cash') {
                 if (asset.region === 'US') {
-                    const fetchQuote = async (sym) => {
-                        const yf = new YahooFinance();
-                        return await yf.quote(sym);
-                    };
-
                     try {
-                        const quote = await fetchQuote('KRW=X');
+                        const quote = await getCachedQuote('KRW=X');
                         if (quote && quote.regularMarketPrice) {
                             currentPrice = quote.regularMarketPrice;
                             previousClose = quote.regularMarketPreviousClose || currentPrice;
@@ -153,7 +177,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry, linkedCashAssetId, exchangeRate } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -247,7 +271,7 @@ export async function POST(request) {
             assetId = newDocRef.id;
         }
 
-        // Insert transaction record
+        // Insert transaction record with denormalized asset info
         const trxRef = collection(db, 'transactions');
         await addDoc(trxRef, {
             asset_id: assetId,
@@ -257,8 +281,71 @@ export async function POST(request) {
             price: prc,
             region: region || 'KR',
             investmentCountry: investmentCountry || region || 'KR',
+            type,
+            name,
+            symbol: symbol || '',
+            account: account || '일반',
             createdAt: serverTimestamp()
         });
+
+        // 3. Handle Linked Cash Asset if provided
+        if (linkedCashAssetId) {
+            try {
+                // Find cash asset
+                const cashDocRef = doc(db, 'assets', linkedCashAssetId);
+                const cashSnapshot = await getDoc(cashDocRef);
+
+                if (cashSnapshot.exists() && cashSnapshot.data().type === 'cash') {
+                    const cashAsset = { id: cashSnapshot.id, ...cashSnapshot.data() };
+
+                    // Calculate total cost
+                    let totalCost = type === 'real_estate'
+                        ? (prc * qty) + (parseFloat(expense) || 0) - (parseFloat(deposit) || 0)
+                        : qty * prc;
+
+                    if (region === 'US') {
+                        const rate = parseFloat(exchangeRate) || 1400;
+                        totalCost = totalCost * rate;
+                    }
+
+                    let newCashQty = cashAsset.quantity;
+                    const cashAction = action === 'buy' ? 'sell' : 'buy'; // If buying asset, selling(deducting) cash
+
+                    if (action === 'buy') {
+                        newCashQty = cashAsset.quantity - totalCost;
+                    } else if (action === 'sell') {
+                        newCashQty = cashAsset.quantity + totalCost;
+                    }
+
+                    // Update cash asset
+                    await updateDoc(cashDocRef, {
+                        quantity: newCashQty,
+                        principal: newCashQty * (cashAsset.avgPrice || 1), // Optional depending on how cash avgPrice is handled
+                        updatedAt: serverTimestamp()
+                    });
+
+                    // Add transaction for cash asset
+                    await addDoc(trxRef, {
+                        asset_id: cashAsset.id,
+                        action: cashAction,
+                        date,
+                        quantity: totalCost,
+                        price: 1, // Cash price is essentially 1 in its currency
+                        region: cashAsset.region,
+                        investmentCountry: cashAsset.investmentCountry || cashAsset.region,
+                        type: 'cash',
+                        name: cashAsset.name,
+                        symbol: cashAsset.symbol || cashAsset.name,
+                        account: cashAsset.account || '일반',
+                        memo: '자동 연동', // Flag or description for automatic sync
+                        createdAt: serverTimestamp()
+                    });
+                }
+            } catch (cashError) {
+                console.error("Failed to update linked cash asset:", cashError);
+                // Non-fatal error for the main asset creation
+            }
+        }
 
         return NextResponse.json({ success: true, id: assetId }, { status: 201 });
     } catch (error) {

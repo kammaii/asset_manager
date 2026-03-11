@@ -13,6 +13,9 @@ const useAssetStore = create(
             cashInstitutions: [],
             savedStockItems: [],
             savedPensionItems: [],
+            savedCryptoItems: [],
+            enabledAssetTypes: ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'],
+            preferredIncludeMap: {}, // 대시보드 포함/불포함 설정값 (로컬 저장용)
             loading: false,
             error: null,
 
@@ -29,6 +32,7 @@ const useAssetStore = create(
                     const currentPensionItems = [...(state.savedPensionItems || [])];
                     let hasNewStockItem = false;
                     let hasNewPensionItem = false;
+                    const updatePayload = {};
 
                     data.forEach(asset => {
                         if (asset.type === 'stock' && asset.symbol && asset.name) {
@@ -43,14 +47,24 @@ const useAssetStore = create(
                                 currentPensionItems.push({ symbol: asset.symbol, name: asset.name });
                                 hasNewPensionItem = true;
                             }
+                        } else if (asset.type === 'crypto' && asset.symbol && asset.name) {
+                            const exists = (state.savedCryptoItems || []).some(i => i.symbol === asset.symbol && i.name === asset.name);
+                            if (!exists) {
+                                if (!updatePayload.savedCryptoItems) updatePayload.savedCryptoItems = [...(state.savedCryptoItems || [])];
+                                // Prevent duplicates within the payload in the same pass
+                                const payloadExists = updatePayload.savedCryptoItems.some(i => i.symbol === asset.symbol && i.name === asset.name);
+                                if (!payloadExists) {
+                                    updatePayload.savedCryptoItems.push({ symbol: asset.symbol, name: asset.name });
+                                }
+                            }
                         }
                     });
 
-                    if (hasNewStockItem || hasNewPensionItem) {
+                    if (hasNewStockItem || hasNewPensionItem || updatePayload.savedCryptoItems) {
                         // Update settings silently with the new generated items using current local state to merge if needed
-                        const updatePayload = {};
                         if (hasNewStockItem) updatePayload.savedStockItems = currentStockItems;
                         if (hasNewPensionItem) updatePayload.savedPensionItems = currentPensionItems;
+
                         fetch('/api/settings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -58,6 +72,7 @@ const useAssetStore = create(
                         });
                         if (hasNewStockItem) set({ savedStockItems: currentStockItems });
                         if (hasNewPensionItem) set({ savedPensionItems: currentPensionItems });
+                        if (updatePayload.savedCryptoItems) set({ savedCryptoItems: updatePayload.savedCryptoItems });
                     }
 
                     set({ assets: data, loading: false });
@@ -190,6 +205,16 @@ const useAssetStore = create(
                         cashInstitutions: data.cashInstitutions || ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행'],
                         savedStockItems: data.savedStockItems || [],
                         savedPensionItems: data.savedPensionItems || [],
+                        savedCryptoItems: data.savedCryptoItems || [],
+                        enabledAssetTypes: (() => {
+                            let types = data.enabledAssetTypes || ['stock', 'pension', 'cash', 'real_estate', 'gold', 'crypto', 'car'];
+                            // Force append crypto and car if they are entirely missing from a legacy user's config
+                            if (!data.hasMigratedV2) {
+                                if (!types.includes('crypto')) types.push('crypto');
+                                if (!types.includes('car')) types.push('car');
+                            }
+                            return [...new Set(types)];
+                        })(),
                     });
                 } catch (error) {
                     console.error('Failed to load settings:', error);
@@ -198,19 +223,24 @@ const useAssetStore = create(
 
             updateSettings: async (newSettings) => {
                 try {
+                    const settingsToSave = { ...newSettings, hasMigratedV2: true };
                     // Optimistically update local state
-                    set((state) => ({ ...state, ...newSettings }));
+                    set((state) => ({ ...state, ...settingsToSave }));
 
                     const res = await fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(newSettings),
+                        body: JSON.stringify(settingsToSave),
                     });
                     if (!res.ok) throw new Error('Failed to update settings');
                 } catch (error) {
                     console.error('Failed to save settings:', error);
                     // Revert might be needed here ideally, but for now we log it.
                 }
+            },
+
+            setPreferredIncludeMap: (includeMap) => {
+                set({ preferredIncludeMap: includeMap });
             },
 
             getSummary: (exchangeRate = 1400) => {
@@ -260,13 +290,29 @@ const useAssetStore = create(
                 const goldProfit = totalGold - goldPrincipal;
                 const goldRate = goldPrincipal > 0 ? (goldProfit / goldPrincipal) * 100 : 0;
 
+                // crypto
+                const cryptoAssets = assets.filter(a => a.type === 'crypto');
+                const totalCrypto = cryptoAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+                const cryptoPrincipal = cryptoAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
+                const cryptoProfit = totalCrypto - cryptoPrincipal;
+                const cryptoRate = cryptoPrincipal > 0 ? (cryptoProfit / cryptoPrincipal) * 100 : 0;
+
+                // car
+                const carAssets = assets.filter(a => a.type === 'car');
+                const totalCar = carAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+                const carPrincipal = carAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
+                const carProfit = totalCar - carPrincipal;
+                const carRate = carPrincipal > 0 ? (carProfit / carPrincipal) * 100 : 0;
+
                 return {
-                    totalAssets, totalProfit, profitRate, dayChange,
-                    totalStock, stockProfit, stockRate,
-                    totalPension, pensionProfit, pensionRate,
-                    totalCash, cashProfit, cashRate,
-                    totalRealEstate, realEstateProfit, realEstateRate,
-                    totalGold, goldProfit, goldRate,
+                    totalAssets, totalPrincipal, totalProfit, profitRate, dayChange,
+                    totalStock, stockProfit, stockRate, stockPrincipal,
+                    totalPension, pensionProfit, pensionRate, pensionPrincipal,
+                    totalCash, cashProfit, cashRate, cashPrincipal,
+                    totalRealEstate, realEstateProfit, realEstateRate, realEstatePrincipal,
+                    totalGold, goldProfit, goldRate, goldPrincipal,
+                    totalCrypto, cryptoProfit, cryptoRate, cryptoPrincipal,
+                    totalCar, carProfit, carRate, carPrincipal
                 };
             },
         }),
@@ -281,7 +327,10 @@ const useAssetStore = create(
                 accountTypes: state.accountTypes,
                 cashInstitutions: state.cashInstitutions,
                 savedStockItems: state.savedStockItems,
-                savedPensionItems: state.savedPensionItems
+                savedPensionItems: state.savedPensionItems,
+                savedCryptoItems: state.savedCryptoItems,
+                enabledAssetTypes: state.enabledAssetTypes,
+                preferredIncludeMap: state.preferredIncludeMap
             }),
         }
     )

@@ -4,15 +4,23 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import useAssetStore from '@/store/useAssetStore';
 import { BarChart, Bar, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal, ArrowLeft } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal, ArrowLeft, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car } from 'lucide-react';
 
-const ASSET_COLORS = {
-  '주식': '#3b82f6',
-  '현금': '#22c55e',
-  '부동산': '#ff7f50', // Coral (Soft Red-Orange)
-  '연금': '#a855f7',
-  '금(Gold)': '#eab308'
+// 모든 자산 유형 메타데이터: id -> { label, labelEn, color(hex), bgColor, activeClass, icon }
+const ASSET_META = {
+  stock: { label: '주식', labelEn: 'Stocks', color: '#3b82f6', bgClass: 'bg-blue-50', activeClass: 'bg-blue-100 text-blue-600', icon: CandlestickChart },
+  pension: { label: '연금', labelEn: 'Pension', color: '#a855f7', bgClass: 'bg-purple-50', activeClass: 'bg-purple-100 text-purple-600', icon: PiggyBank },
+  cash: { label: '현금', labelEn: 'Cash', color: '#22c55e', bgClass: 'bg-green-50', activeClass: 'bg-green-100 text-green-600', icon: Banknote },
+  real_estate: { label: '부동산', labelEn: 'Real Estate', color: '#ff7f50', bgClass: 'bg-orange-50', activeClass: 'bg-orange-100 text-orange-600', icon: Building },
+  gold: { label: '금(Gold)', labelEn: 'Gold', color: '#eab308', bgClass: 'bg-amber-50', activeClass: 'bg-amber-100 text-amber-600', icon: Gem },
+  crypto: { label: '가상화폐', labelEn: 'Crypto', color: '#06b6d4', bgClass: 'bg-cyan-50', activeClass: 'bg-cyan-100 text-cyan-600', icon: Bitcoin },
+  car: { label: '자동차', labelEn: 'Vehicle', color: '#64748b', bgClass: 'bg-slate-100', activeClass: 'bg-slate-200 text-slate-600', icon: Car },
 };
+
+// Recharts에서 쓰는 색상 맵 (라벨 기반)
+const ASSET_COLORS = Object.fromEntries(
+  Object.values(ASSET_META).map(m => [m.label, m.color])
+);
 
 const DRILLDOWN_COLORS = {
   '한국': '#ef4444',
@@ -22,20 +30,24 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
-  const [includeStock, setIncludeStock] = useState(true);
-  const [includeCash, setIncludeCash] = useState(true);
-  const [includeRealEstate, setIncludeRealEstate] = useState(false);
-  const [includePension, setIncludePension] = useState(false);
-  const [includeGold, setIncludeGold] = useState(false);
+  // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
+  const includeMap = {};
+  (enabledAssetTypes || []).forEach(type => {
+    includeMap[type] = preferredIncludeMap?.[type] ?? true;
+  });
+
   const [currentExchangeRate, setCurrentExchangeRate] = useState(1400); // Default fallback
   const [drillDownCategory, setDrillDownCategory] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [actionMenu, setActionMenu] = useState({ visible: false, x: 0, y: 0, asset: null, assetType: null });
 
   useEffect(() => {
     setMounted(true);
+    fetchSettings();
     fetchAssets();
+    fetchTransactions();
     fetchHistory();
 
     // Fetch current exchange rate
@@ -51,7 +63,39 @@ export default function Dashboard() {
       }
     };
     fetchRate();
-  }, [fetchAssets, fetchHistory]);
+  }, [fetchAssets, fetchTransactions, fetchHistory, fetchSettings]);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (actionMenu.visible) setActionMenu(prev => ({ ...prev, visible: false }));
+    };
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [actionMenu.visible]);
+
+  const handleRowClick = (e, asset, assetType) => {
+    if (['stock', 'crypto', 'pension'].includes(assetType)) {
+      e.stopPropagation();
+      setActionMenu({
+        visible: true,
+        x: e.pageX,
+        y: e.pageY,
+        asset,
+        assetType
+      });
+    }
+  };
+
+  // 자산 유형 정렬 순서 정의
+  const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'];
+
+  const toggleInclude = (typeId) => {
+    const nextValue = !(preferredIncludeMap?.[typeId] ?? true);
+    setPreferredIncludeMap({
+      ...preferredIncludeMap,
+      [typeId]: nextValue
+    });
+  };
 
   const summary = getSummary(currentExchangeRate);
   const formatCurrency = (val, region = 'KR') => {
@@ -62,19 +106,39 @@ export default function Dashboard() {
   };
   const formatPercent = (val) => `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
 
-  const displayTotalAssets =
-    (includeStock ? summary.totalStock : 0) +
-    (includeCash ? summary.totalCash : 0) +
-    (includeRealEstate ? (summary.totalRealEstate || 0) : 0) +
-    (includePension ? summary.totalPension : 0) +
-    (includeGold ? (summary.totalGold || 0) : 0);
+  const SUMMARY_KEYS = {
+    stock: { total: 'totalStock', profit: 'stockProfit', rate: 'stockRate' },
+    crypto: { total: 'totalCrypto', profit: 'cryptoProfit', rate: 'cryptoRate' },
+    cash: { total: 'totalCash', profit: 'cashProfit', rate: 'cashRate' },
+    pension: { total: 'totalPension', profit: 'pensionProfit', rate: 'pensionRate' },
+    gold: { total: 'totalGold', profit: 'goldProfit', rate: 'goldRate' },
+    real_estate: { total: 'totalRealEstate', profit: 'realEstateProfit', rate: 'realEstateRate' },
+    car: { total: 'totalCar', profit: 'carProfit', rate: 'carRate' },
+  };
 
-  const displayTotalProfit =
-    (includeStock ? summary.stockProfit : 0) +
-    (includeCash ? summary.cashProfit : 0) +
-    (includeRealEstate ? (summary.realEstateProfit || 0) : 0) +
-    (includePension ? summary.pensionProfit : 0) +
-    (includeGold ? (summary.goldProfit || 0) : 0);
+  const HISTORY_KEYS = {
+    stock: 'stockValue',
+    pension: 'pensionValue',
+    cash: 'cashValue',
+    real_estate: 'realEstateValue',
+    gold: 'goldValue',
+    crypto: 'cryptoValue',
+    car: 'carValue'
+  };
+
+  const sortedEnabledTypes = [...(enabledAssetTypes || [])].sort((a, b) => {
+    return PREFERRED_ORDER.indexOf(a) - PREFERRED_ORDER.indexOf(b);
+  });
+
+  const displayTotalAssets = sortedEnabledTypes.reduce((sum, type) => {
+    const key = SUMMARY_KEYS[type];
+    return sum + (includeMap[type] && key ? (summary[key.total] || 0) : 0);
+  }, 0);
+
+  const displayTotalProfit = (enabledAssetTypes || []).reduce((sum, type) => {
+    const key = SUMMARY_KEYS[type];
+    return sum + (includeMap[type] && key ? (summary[key.profit] || 0) : 0);
+  }, 0);
 
   const displayTotalPrincipal = displayTotalAssets - displayTotalProfit;
   const displayProfitRate = displayTotalPrincipal > 0 ? (displayTotalProfit / displayTotalPrincipal) * 100 : 0;
@@ -85,13 +149,12 @@ export default function Dashboard() {
   let drillDownTotal = 0;
 
   if (!drillDownCategory) {
-    displayAllocation = [
-      includeStock && { name: '주식', value: summary.totalStock },
-      includeCash && { name: '현금', value: summary.totalCash },
-      includeRealEstate && { name: '부동산', value: summary.totalRealEstate || 0 },
-      includePension && { name: '연금', value: summary.totalPension },
-      includeGold && { name: '금(Gold)', value: summary.totalGold || 0 },
-    ].filter(Boolean).filter(item => item.value > 0);
+    displayAllocation = (enabledAssetTypes || []).map(type => {
+      const meta = ASSET_META[type];
+      const key = SUMMARY_KEYS[type];
+      if (!meta || !key || !includeMap[type]) return null;
+      return { name: meta.label, value: summary[key.total] || 0 };
+    }).filter(Boolean).filter(item => item.value > 0);
   } else {
     allocationTitle = `${drillDownCategory} 상세 비중`;
     let items = [];
@@ -119,19 +182,52 @@ export default function Dashboard() {
     drillDownTotal = items.reduce((sum, item) => sum + item.value, 0);
   }
 
+  const currentDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const todayDateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+  const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+  const currentSummaryData = {
+    stockValue: summary.totalStock || 0,
+    cashValue: summary.totalCash || 0,
+    pensionValue: summary.totalPension || 0,
+    realEstateValue: summary.totalRealEstate || 0,
+    goldValue: summary.totalGold || 0,
+    cryptoValue: summary.totalCrypto || 0,
+    carValue: summary.totalCar || 0,
+    totalValue: displayTotalAssets
+  };
+
+  let processedDailyHistory = [...(dailyHistory || [])];
+  if (processedDailyHistory.length > 0 && processedDailyHistory[processedDailyHistory.length - 1].date !== todayDateStr) {
+    processedDailyHistory.push({ ...currentSummaryData, date: todayDateStr });
+  } else if (processedDailyHistory.length > 0) {
+    processedDailyHistory[processedDailyHistory.length - 1] = { ...currentSummaryData, date: todayDateStr };
+  } else if (!loading) {
+    processedDailyHistory = [{ ...currentSummaryData, date: todayDateStr }];
+  }
+
+  let processedMonthlyHistory = [...(history || [])];
+  if (processedMonthlyHistory.length > 0 && processedMonthlyHistory[processedMonthlyHistory.length - 1].month !== currentMonthStr) {
+    processedMonthlyHistory.push({ ...currentSummaryData, month: currentMonthStr });
+  } else if (processedMonthlyHistory.length > 0) {
+    processedMonthlyHistory[processedMonthlyHistory.length - 1] = { ...currentSummaryData, month: currentMonthStr };
+  } else if (!loading) {
+    processedMonthlyHistory = [{ ...currentSummaryData, month: currentMonthStr }];
+  }
+
   let chartHistory = [];
   if (filter === 'DAILY') {
-    chartHistory = dailyHistory?.length > 0 ? dailyHistory.slice(-30).map(d => ({
+    chartHistory = processedDailyHistory?.length > 0 ? processedDailyHistory.slice(-30).map(d => ({
       ...d,
       displayLabel: d.date ? d.date.substring(5) : '', // MM-DD
     })) : [];
   } else if (filter === 'MONTHLY') {
-    chartHistory = history?.length > 0 ? history.slice(-12).map(m => ({
+    chartHistory = processedMonthlyHistory?.length > 0 ? processedMonthlyHistory.slice(-12).map(m => ({
       ...m,
       displayLabel: m.month ? `${m.month.split('-')[0].slice(2)}.${m.month.split('-')[1]}` : '', // YY.MM
     })) : [];
   } else {
-    chartHistory = history?.length > 0 ? history.map(m => ({
+    chartHistory = processedMonthlyHistory?.length > 0 ? processedMonthlyHistory.map(m => ({
       ...m,
       displayLabel: m.month ? `${m.month.split('-')[0].slice(2)}.${m.month.split('-')[1]}` : '', // YY.MM
     })) : [];
@@ -169,6 +265,9 @@ export default function Dashboard() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
+          <Link href="/settings" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500" title="설정">
+            <Settings size={22} />
+          </Link>
         </div>
       </header>
 
@@ -204,7 +303,7 @@ export default function Dashboard() {
         </div>
 
         {/* Top Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-${Math.min((enabledAssetTypes || []).length + 1, 6)} gap-4`}>
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1">
             <div className="flex justify-between items-center relative z-10">
               <p className="text-sm font-medium text-slate-500 flex flex-col">
@@ -225,135 +324,43 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-blue-50 transition-colors z-0"></div>
-            <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500 flex flex-col">
-                <span>주식 자산</span>
-                <span className="text-[11px] opacity-70">Total Stocks</span>
-              </p>
-              <button
-                onClick={() => setIncludeStock(!includeStock)}
-                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeStock ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}
-              >
-                {includeStock ? '포함' : '불포함'}
-              </button>
-            </div>
-            <div className="flex items-end gap-2 mt-1 relative z-10">
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalStock)}</span>
-            </div>
-            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.stockProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              <div className="flex items-center gap-1">
-                {summary.stockProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{summary.stockProfit > 0 ? '+' : ''}{formatCurrency(summary.stockProfit)}</span>
-              </div>
-              <span className="ml-[20px] opacity-80">({formatPercent(summary.stockRate)})</span>
-            </div>
-          </div>
+          {sortedEnabledTypes.map(typeId => {
+            const meta = ASSET_META[typeId];
+            const keys = SUMMARY_KEYS[typeId];
+            if (!meta || !keys) return null;
+            const totalVal = summary[keys.total] || 0;
+            const profitVal = summary[keys.profit] || 0;
+            const rateVal = summary[keys.rate] || 0;
+            const isIncluded = includeMap[typeId];
 
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-green-50 transition-colors z-0"></div>
-            <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500 flex flex-col">
-                <span>현금 자산</span>
-                <span className="text-[11px] opacity-70">Total Cash</span>
-              </p>
-              <button
-                onClick={() => setIncludeCash(!includeCash)}
-                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeCash ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}
-              >
-                {includeCash ? '포함' : '불포함'}
-              </button>
-            </div>
-            <div className="flex items-end gap-2 mt-1 relative z-10">
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalCash)}</span>
-            </div>
-            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.cashProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              <div className="flex items-center gap-1">
-                {summary.cashProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{summary.cashProfit > 0 ? '+' : ''}{formatCurrency(summary.cashProfit)}</span>
+            return (
+              <div key={typeId} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
+                <div className={`absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full transition-colors z-0 ${meta.bgClass}`}></div>
+                <div className="flex justify-between items-center relative z-10">
+                  <p className="text-sm font-medium text-slate-500 flex flex-col">
+                    <span>{meta.label} 자산</span>
+                    <span className="text-[11px] opacity-70">Total {meta.labelEn}</span>
+                  </p>
+                  <button
+                    onClick={() => toggleInclude(typeId)}
+                    className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${isIncluded ? meta.activeClass : 'bg-slate-200 text-slate-500'}`}
+                  >
+                    {isIncluded ? '포함' : '불포함'}
+                  </button>
+                </div>
+                <div className="flex items-end gap-2 mt-1 relative z-10">
+                  <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(totalVal)}</span>
+                </div>
+                <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${profitVal >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+                  <div className="flex items-center gap-1">
+                    {profitVal >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                    <span>{profitVal > 0 ? '+' : ''}{formatCurrency(profitVal)}</span>
+                  </div>
+                  <span className="ml-[20px] opacity-80">({formatPercent(rateVal)})</span>
+                </div>
               </div>
-              <span className="ml-[20px] opacity-80">({formatPercent(summary.cashRate)})</span>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-coral-50 transition-colors z-0" style={{ backgroundColor: '#fff5f2' }}></div>
-            <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500 flex flex-col">
-                <span>부동산 자산</span>
-                <span className="text-[11px] opacity-70">Real Estate</span>
-              </p>
-              <button
-                onClick={() => setIncludeRealEstate(!includeRealEstate)}
-                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeRealEstate ? 'bg-orange-100 text-orange-600' : 'bg-slate-200 text-slate-500'}`}
-              >
-                {includeRealEstate ? '포함' : '불포함'}
-              </button>
-            </div>
-            <div className="flex items-end gap-2 mt-1 relative z-10">
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalRealEstate || 0)}</span>
-            </div>
-            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.realEstateProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              <div className="flex items-center gap-1">
-                {summary.realEstateProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{summary.realEstateProfit > 0 ? '+' : ''}{formatCurrency(summary.realEstateProfit || 0)}</span>
-              </div>
-              <span className="ml-[20px] opacity-80">({formatPercent(summary.realEstateRate || 0)})</span>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-purple-50 transition-colors z-0"></div>
-            <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500 flex flex-col">
-                <span>연금 자산</span>
-                <span className="text-[11px] opacity-70">Total Pension</span>
-              </p>
-              <button
-                onClick={() => setIncludePension(!includePension)}
-                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includePension ? 'bg-purple-100 text-purple-600' : 'bg-slate-200 text-slate-500'}`}
-              >
-                {includePension ? '포함' : '불포함'}
-              </button>
-            </div>
-            <div className="flex items-end gap-2 mt-1 relative z-10">
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalPension)}</span>
-            </div>
-            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.pensionProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              <div className="flex items-center gap-1">
-                {summary.pensionProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{summary.pensionProfit > 0 ? '+' : ''}{formatCurrency(summary.pensionProfit)}</span>
-              </div>
-              <span className="ml-[20px] opacity-80">({formatPercent(summary.pensionRate)})</span>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full bg-amber-50 transition-colors z-0"></div>
-            <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500 flex flex-col">
-                <span>금 자산</span>
-                <span className="text-[11px] opacity-70">Total Gold</span>
-              </p>
-              <button
-                onClick={() => setIncludeGold(!includeGold)}
-                className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${includeGold ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}
-              >
-                {includeGold ? '포함' : '불포함'}
-              </button>
-            </div>
-            <div className="flex items-end gap-2 mt-1 relative z-10">
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(summary.totalGold || 0)}</span>
-            </div>
-            <div className={`flex flex-col mt-2 text-xs font-bold relative z-10 ${summary.goldProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              <div className="flex items-center gap-1">
-                {summary.goldProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{summary.goldProfit > 0 ? '+' : ''}{formatCurrency(summary.goldProfit || 0)}</span>
-              </div>
-              <span className="ml-[20px] opacity-80">({formatPercent(summary.goldRate || 0)})</span>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Charts Section */}
@@ -454,19 +461,25 @@ export default function Dashboard() {
                   <Legend
                     iconType="circle"
                     wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                    payload={[
-                      includeStock && { value: '주식', type: 'circle', id: 'stockValue', color: ASSET_COLORS['주식'] },
-                      includeCash && { value: '현금', type: 'circle', id: 'cashValue', color: ASSET_COLORS['현금'] },
-                      includeRealEstate && { value: '부동산', type: 'circle', id: 'realEstateValue', color: ASSET_COLORS['부동산'] },
-                      includePension && { value: '연금', type: 'circle', id: 'pensionValue', color: ASSET_COLORS['연금'] },
-                      includeGold && { value: '금(Gold)', type: 'circle', id: 'goldValue', color: ASSET_COLORS['금(Gold)'] }
-                    ].filter(Boolean)}
+                    payload={(enabledAssetTypes || []).map(typeId => {
+                      const meta = ASSET_META[typeId];
+                      return includeMap[typeId] && meta ? { value: meta.label, type: 'circle', id: HISTORY_KEYS[typeId], color: meta.color } : null;
+                    }).filter(Boolean)}
                   />
-                  {includeStock && <Bar dataKey="stockValue" name="주식" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />}
-                  {includeCash && <Bar dataKey="cashValue" name="현금" stackId="a" fill="#22c55e" />}
-                  {includeRealEstate && <Bar dataKey="realEstateValue" name="부동산" stackId="a" fill="#ff7f50" />}
-                  {includePension && <Bar dataKey="pensionValue" name="연금" stackId="a" fill="#a855f7" radius={includeGold ? [0, 0, 0, 0] : [4, 4, 0, 0]} />}
-                  {includeGold && <Bar dataKey="goldValue" name="금(Gold)" stackId="a" fill="#eab308" radius={[4, 4, 0, 0]} />}
+                  {(enabledAssetTypes || []).map((typeId, index) => {
+                    const meta = ASSET_META[typeId];
+                    if (!meta || !includeMap[typeId]) return null;
+                    return (
+                      <Bar
+                        key={typeId}
+                        dataKey={HISTORY_KEYS[typeId]}
+                        name={meta.label}
+                        stackId="a"
+                        fill={meta.color}
+                        radius={index === (enabledAssetTypes || []).length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                      />
+                    );
+                  })}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -474,24 +487,25 @@ export default function Dashboard() {
         </div>
 
         {/* Portfolio Tables */}
-        {['stock', 'pension', 'cash', 'real_estate', 'gold'].map(assetType => {
-          const filteredAssets = assets
-            .filter(a => a.type === assetType)
-            .filter(a => a.type === 'real_estate' ? true : (a.quantity || 0) > 0)
-            .sort((a, b) => {
-              const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
-              const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
-              return valB - valA;
-            });
-          const title = assetType === 'stock' ? '주식' : assetType === 'pension' ? '연금' : assetType === 'real_estate' ? '부동산' : assetType === 'gold' ? '금(Gold)' : '현금';
+        {sortedEnabledTypes.map(assetType => {
+          const filteredAssets = assets.filter(a => a.type === assetType).sort((a, b) => {
+            const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
+            const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
+            return valB - valA;
+          });
+          const meta = ASSET_META[assetType];
+          if (!meta) return null;
+          const title = meta.label;
 
-          if (filteredAssets.length === 0 && assetType !== 'stock') return null; // Ensure at least stock table shows even if empty
+          // 최소한 주식 테이블은 내역이 없어도 보이도록 (또는 첫 번째 활성화된 자산)
+          // 가상화폐와 자동차도 내역이 없더라도 보이도록 설정 (유저 요청 반영)
+          if (filteredAssets.length === 0 && !['stock', 'crypto', 'car', sortedEnabledTypes[0]].includes(assetType)) return null;
 
           return (
             <div key={assetType} className="rounded-xl bg-white border border-slate-200 overflow-hidden mt-6">
               <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-slate-900">{title} 보유 현황 리스트</h3>
-                <Link href={`/entry?tab=${assetType === 'gold' ? 'gold' : assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
+                <Link href={`/entry?tab=${assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[700px]">
@@ -517,6 +531,13 @@ export default function Dashboard() {
                         <th className="p-4 text-right">현재가</th>
                         <th className="p-4 text-right">수익금 / 수익률</th>
                       </tr>
+                    ) : assetType === 'car' ? (
+                      <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
+                        <th className="p-4 w-32">날짜</th>
+                        <th className="p-4 w-40">차량번호</th>
+                        <th className="p-4 min-w-[150px]">이름</th>
+                        <th className="p-4 text-right">매수가</th>
+                      </tr>
                     ) : (
                       <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
                         <th className="p-4">구분</th>
@@ -533,13 +554,17 @@ export default function Dashboard() {
                   <tbody className="text-sm divide-y divide-slate-100">
                     {filteredAssets.length === 0 ? (
                       <tr>
-                        <td colSpan={assetType === 'cash' ? "2" : "8"} className="p-8 text-center text-slate-500">
+                        <td colSpan={assetType === 'cash' ? "2" : assetType === 'car' ? "4" : "8"} className="p-8 text-center text-slate-500">
                           내역이 없습니다. "자산 추가" 버튼을 통해 시작해보세요.
                         </td>
                       </tr>
                     ) : (
                       filteredAssets.map((asset) => (
-                        <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                        <tr
+                          key={asset.id}
+                          className={`hover:bg-slate-50 transition-colors ${['stock', 'crypto', 'pension'].includes(assetType) ? 'cursor-pointer' : ''}`}
+                          onClick={(e) => handleRowClick(e, asset, assetType)}
+                        >
                           {assetType === 'cash' ? (
                             <>
                               <td className="p-4 font-bold text-slate-900">{asset.name}</td>
@@ -594,6 +619,17 @@ export default function Dashboard() {
                                     {asset.profitGain > 0 ? '+' : ''}{asset.netInvestment > 0 ? ((asset.profitGain / asset.netInvestment) * 100).toFixed(2) : 0}%
                                   </span>
                                 </div>
+                              </td>
+                            </>
+                          ) : assetType === 'car' ? (
+                            <>
+                              <td className="p-4 text-slate-500 whitespace-nowrap">
+                                {transactions?.find(t => t.asset_id === asset.id)?.date || '-'}
+                              </td>
+                              <td className="p-4 font-bold text-slate-900">{asset.symbol || '-'}</td>
+                              <td className="p-4 font-bold text-slate-900">{asset.name}</td>
+                              <td className="p-4 text-right font-bold text-slate-900 font-mono">
+                                {formatCurrency(asset.principal, 'KR')}
                               </td>
                             </>
                           ) : (
@@ -654,6 +690,28 @@ export default function Dashboard() {
           );
         })}
       </main>
+
+      {/* Floating Action Menu */}
+      {actionMenu.visible && actionMenu.asset && (
+        <div
+          className="absolute z-[100] bg-white rounded-lg shadow-xl border border-slate-200 p-2 flex gap-2"
+          style={{ top: actionMenu.y, left: actionMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Link
+            href={`/entry?tab=${actionMenu.assetType}&action=buy&name=${encodeURIComponent(actionMenu.asset.name)}&symbol=${encodeURIComponent(actionMenu.asset.symbol || '')}&region=${actionMenu.asset.region || 'KR'}&investmentCountry=${actionMenu.asset.investmentCountry || actionMenu.asset.region || 'KR'}&account=${encodeURIComponent(actionMenu.asset.account || '일반')}`}
+            className="px-4 py-2 text-sm font-bold rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+          >
+            매수
+          </Link>
+          <Link
+            href={`/entry?tab=${actionMenu.assetType}&action=sell&name=${encodeURIComponent(actionMenu.asset.name)}&symbol=${encodeURIComponent(actionMenu.asset.symbol || '')}&region=${actionMenu.asset.region || 'KR'}&investmentCountry=${actionMenu.asset.investmentCountry || actionMenu.asset.region || 'KR'}&account=${encodeURIComponent(actionMenu.asset.account || '일반')}`}
+            className="px-4 py-2 text-sm font-bold rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+          >
+            매도
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

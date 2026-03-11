@@ -3,10 +3,20 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import useAssetStore from '@/store/useAssetStore';
-import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash, Gem } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, CandlestickChart, PiggyBank, Banknote, Building, Check, Edit2, X, Trash2, ChevronDown, Plus, Trash, Gem, Bitcoin, Car, Settings } from 'lucide-react';
+
+const ASSET_META = {
+    stock: { label: '주식', labelEn: 'Stocks', icon: CandlestickChart },
+    pension: { label: '연금', labelEn: 'Pension', icon: PiggyBank },
+    cash: { label: '현금', labelEn: 'Cash', icon: Banknote },
+    real_estate: { label: '부동산', labelEn: 'Real Est.', icon: Building },
+    gold: { label: '금', labelEn: 'Gold', icon: Gem },
+    crypto: { label: '가상화폐', labelEn: 'Crypto', icon: Bitcoin },
+    car: { label: '자동차', labelEn: 'Vehicle', icon: Car },
+};
 
 export default function EntryPage() {
-    const { assets, fetchAssets, transactions, fetchTransactions, allTransactionsLoaded, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, savedStockItems, savedPensionItems, fetchSettings, updateSettings, loading } = useAssetStore();
+    const { assets, fetchAssets, transactions, fetchTransactions, allTransactionsLoaded, addAsset, updateTransaction, deleteTransaction, accountTypes, cashInstitutions, savedStockItems, savedPensionItems, savedCryptoItems, fetchSettings, updateSettings, loading, enabledAssetTypes } = useAssetStore();
     const [activeTab, setActiveTab] = useState('stock');
     const [editingId, setEditingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
@@ -35,7 +45,8 @@ export default function EntryPage() {
         expense: '',
         deposit: '',
         realEstateCurrentPrice: '',
-        goldCurrentPrice: ''
+        goldCurrentPrice: '',
+        linkedCashAssetId: ''
     });
 
     useEffect(() => {
@@ -76,30 +87,67 @@ export default function EntryPage() {
         if (typeof window !== 'undefined') {
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab');
-            if (tabParam && ['stock', 'pension', 'cash', 'real_estate', 'gold'].includes(tabParam)) {
+            if (tabParam) {
                 setActiveTab(tabParam);
             }
         }
-    }, [fetchAssets, fetchTransactions]);
+    }, [fetchAssets, fetchTransactions, fetchSettings]);
 
-    // Reset form when tab changes
+    // 활성화된 탭이 enabled 리스트에 없으면 첫 번째 활성 탭으로 폴백
     useEffect(() => {
+        if (enabledAssetTypes && enabledAssetTypes.length > 0) {
+            if (!enabledAssetTypes.includes(activeTab)) {
+                setActiveTab(enabledAssetTypes[0]);
+            }
+        }
+    }, [enabledAssetTypes, activeTab]);
+
+    // Reset form when tab changes (or when component finishes mounting to ensure URL is synced)
+    useEffect(() => {
+        if (!mounted) return;
+
+        let paramAction = null, paramRegion = null, paramInvestmentCountry = null;
+        let paramAccount = null, paramSymbol = null, paramName = null;
+        let paramTab = null;
+        let hasActionOrName = false;
+
+        if (typeof window !== 'undefined' && window.location.search) {
+            const urlParams = new URLSearchParams(window.location.search);
+            paramTab = urlParams.get('tab');
+            paramAction = urlParams.get('action');
+            paramRegion = urlParams.get('region');
+            paramInvestmentCountry = urlParams.get('investmentCountry');
+            paramAccount = urlParams.get('account');
+            paramSymbol = urlParams.get('symbol');
+            paramName = urlParams.get('name');
+            hasActionOrName = !!(paramAction || paramName);
+        }
+
+        const isMatchingTab = paramTab === activeTab;
+        const shouldUseParams = isMatchingTab && hasActionOrName;
+
         setFormData({
-            action: 'buy',
+            action: shouldUseParams && paramAction ? paramAction : 'buy',
             date: new Date().toISOString().split('T')[0],
-            region: 'KR',
-            investmentCountry: 'KR',
-            account: '일반',
-            symbol: '',
-            name: '',
+            region: shouldUseParams && paramRegion ? paramRegion : 'KR',
+            investmentCountry: shouldUseParams && paramInvestmentCountry ? paramInvestmentCountry : 'KR',
+            account: shouldUseParams && paramAccount ? paramAccount : '일반',
+            symbol: shouldUseParams && paramSymbol ? paramSymbol : '',
+            name: shouldUseParams && paramName ? paramName : '',
             quantity: '',
             price: '',
             expense: '',
             deposit: '',
+            linkedCashAssetId: ''
         });
         setEditingId(null);
         setVisibleCount(10);
-    }, [activeTab]);
+
+        if (typeof window !== 'undefined' && shouldUseParams) {
+            // Clean URL after applying params so manual tab clicks don't carry them over
+            window.history.replaceState({}, '', `/entry?tab=${activeTab}`);
+        }
+    }, [activeTab, mounted]);
 
     const addInstitution = async () => {
         if (newInstitution.trim() && !cashInstitutions.includes(newInstitution.trim())) {
@@ -154,12 +202,15 @@ export default function EntryPage() {
             const sym = newStockSymbol.trim().toUpperCase();
             const nm = newStockName.trim();
             const isPension = activeTab === 'pension';
-            const currentItems = isPension ? (savedPensionItems || []) : (savedStockItems || []);
+            const isCrypto = activeTab === 'crypto';
+            const currentItems = isPension ? (savedPensionItems || []) : (isCrypto ? (savedCryptoItems || []) : (savedStockItems || []));
             const exists = currentItems.some(item => item.symbol === sym && item.name === nm);
             if (!exists) {
                 const updated = [...currentItems, { symbol: sym, name: nm }];
                 if (isPension) {
                     await updateSettings({ savedPensionItems: updated });
+                } else if (isCrypto) {
+                    await updateSettings({ savedCryptoItems: updated });
                 } else {
                     await updateSettings({ savedStockItems: updated });
                 }
@@ -176,10 +227,13 @@ export default function EntryPage() {
     const removeStockItem = async (itemToRemove, e) => {
         e.stopPropagation();
         const isPension = activeTab === 'pension';
-        const currentItems = isPension ? (savedPensionItems || []) : (savedStockItems || []);
+        const isCrypto = activeTab === 'crypto';
+        const currentItems = isPension ? (savedPensionItems || []) : (isCrypto ? (savedCryptoItems || []) : (savedStockItems || []));
         const updated = currentItems.filter(item => !(item.symbol === itemToRemove.symbol && item.name === itemToRemove.name));
         if (isPension) {
             await updateSettings({ savedPensionItems: updated });
+        } else if (isCrypto) {
+            await updateSettings({ savedCryptoItems: updated });
         } else {
             await updateSettings({ savedStockItems: updated });
         }
@@ -243,7 +297,7 @@ export default function EntryPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '', linkedCashAssetId: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -282,6 +336,11 @@ export default function EntryPage() {
             } else if (activeTab === 'gold') {
                 if (!formData.name || !formData.quantity || !formData.price || !formData.action || !formData.date) {
                     alert("필수 항목을 모두 입력해주세요 (자산명, 수량(돈), 매수/매도, 날짜, 단가).");
+                    return;
+                }
+            } else if (activeTab === 'car') {
+                if (!formData.symbol || !formData.name || !formData.date || !formData.price) {
+                    alert("필수 항목을 모두 입력해주세요 (차량 번호/코드, 자산 명칭, 날짜, 체결 단가).");
                     return;
                 }
             } else {
@@ -357,9 +416,27 @@ export default function EntryPage() {
                     price: parseFloat(formData.price),
                     expense: parseFloat(formData.expense) || 0,
                     deposit: parseFloat(formData.deposit) || 0,
-                    realEstateCurrentPrice: parseFloat(formData.realEstateCurrentPrice) || parseFloat(formData.price)
+                    realEstateCurrentPrice: parseFloat(formData.realEstateCurrentPrice) || parseFloat(formData.price),
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
                 });
-                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' }));
+                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', linkedCashAssetId: '' }));
+            } else if (activeTab === 'car') {
+                await addAsset({
+                    type: activeTab,
+                    action: 'buy',
+                    date: formData.date,
+                    region: 'KR',
+                    investmentCountry: 'KR',
+                    account: '일반',
+                    symbol: formData.symbol.toUpperCase(),
+                    name: formData.name,
+                    quantity: 1,
+                    price: parseFloat(formData.price),
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
+                });
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', linkedCashAssetId: '' }));
             } else {
                 await addAsset({
                     type: activeTab,
@@ -372,10 +449,12 @@ export default function EntryPage() {
                     name: formData.name,
                     quantity: parseFloat(formData.quantity),
                     price: parseFloat(formData.price),
-                    goldCurrentPrice: parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price)
+                    goldCurrentPrice: parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price),
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
                 });
 
-                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '' }));
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '', linkedCashAssetId: '' }));
             }
         } catch (e) {
             console.error("오류 발생: " + e.message);
@@ -393,6 +472,7 @@ export default function EntryPage() {
     const filteredTransactions = transactions?.filter(t => t.type === activeTab) || [];
     const filteredAssets = assets.filter(a => a.type === activeTab);
     const totalCategoryValue = filteredAssets.reduce((sum, a) => sum + (a.totalValue || 0), 0);
+    const cashAssets = assets.filter(a => a.type === 'cash');
 
     if (!mounted) {
         return (
@@ -418,6 +498,9 @@ export default function EntryPage() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
+                    <Link href="/settings" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500" title="설정">
+                        <Settings size={22} />
+                    </Link>
                 </div>
             </header>
 
@@ -434,22 +517,31 @@ export default function EntryPage() {
                 <div className="flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="border-b border-slate-200">
                         <div className="flex px-6 gap-8 overflow-x-auto border-b border-slate-200">
-                            {[
-                                { id: 'stock', icon: CandlestickChart, label: '주식 (Stocks)' },
-                                { id: 'pension', icon: PiggyBank, label: '연금 (Pension)' },
-                                { id: 'cash', icon: Banknote, label: '현금 (Cash)' },
-                                { id: 'real_estate', icon: Building, label: '부동산 (Real Est.)' },
-                                { id: 'gold', icon: Gem, label: '금 (Gold)' },
-                            ].map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-2 pb-3 pt-4 px-2 border-b-[3px] transition-all ${activeTab === tab.id ? 'border-[#0d7ff2] text-[#0d7ff2]' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'}`}
-                                >
-                                    <tab.icon size={20} />
-                                    <p className="text-sm font-bold">{tab.label}</p>
-                                </button>
-                            ))}
+                            {(() => {
+                                const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'];
+                                const sortedTabs = (enabledAssetTypes || []).sort((a, b) => {
+                                    return PREFERRED_ORDER.indexOf(a) - PREFERRED_ORDER.indexOf(b);
+                                });
+                                return sortedTabs.map((typeId) => {
+                                    const meta = ASSET_META[typeId];
+                                    if (!meta) return null;
+                                    return (
+                                        <button
+                                            key={typeId}
+                                            onClick={() => {
+                                                if (typeof window !== 'undefined') {
+                                                    window.history.replaceState({}, '', `/entry?tab=${typeId}`);
+                                                }
+                                                setActiveTab(typeId);
+                                            }}
+                                            className={`flex items-center gap-2 pb-3 pt-4 px-2 border-b-[3px] transition-all whitespace-nowrap ${activeTab === typeId ? 'border-[#0d7ff2] text-[#0d7ff2]' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'}`}
+                                        >
+                                            <meta.icon size={20} />
+                                            <p className="text-sm font-bold">{meta.label} <span className="text-xs opacity-70 ml-0.5">({meta.labelEn})</span></p>
+                                        </button>
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
 
@@ -546,61 +638,71 @@ export default function EntryPage() {
                                 </>
                             ) : (
                                 <>
-                                    <div className="flex flex-col gap-1 min-w-[120px]">
-                                        <label className="text-xs font-semibold text-slate-500">거래 조건 (매수/매도)</label>
-                                        <select name="action" value={formData.action} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm">
-                                            <option value="buy">매수 (Buy)</option>
-                                            <option value="sell">매도 (Sell)</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex flex-col gap-1 min-w-[130px]">
-                                        <label className="text-xs font-semibold text-slate-500">날짜</label>
-                                        <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
-                                    </div>
-                                    <div className="flex flex-col gap-1 min-w-[130px] relative">
-                                        <label className="text-xs font-semibold text-slate-500">구분 (계좌)</label>
-                                        <div
-                                            className="border border-slate-300 rounded px-2 py-1.5 text-sm flex justify-between items-center cursor-pointer bg-white"
-                                            onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
-                                        >
-                                            <span className={formData.account ? "text-slate-900" : "text-slate-400"}>
-                                                {formData.account || "일반"}
-                                            </span>
-                                            <ChevronDown size={16} className="text-slate-400" />
-                                        </div>
-                                        {isAccountDropdownOpen && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
-                                                {accountTypes.map((type, idx) => (
-                                                    <div key={idx} className="flex justify-between items-center px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => handleAccountSelect(type)}>
-                                                        <span className="text-sm font-medium text-slate-700">{type}</span>
-                                                        <button
-                                                            onClick={(e) => removeAccountType(type, e)}
-                                                            className="text-slate-300 hover:text-red-500 p-1"
-                                                            title="삭제"
-                                                        >
-                                                            <Trash size={14} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <div className="p-2 flex gap-2 border-t border-slate-200 bg-slate-50">
-                                                    <input
-                                                        type="text"
-                                                        value={newAccountType}
-                                                        onChange={(e) => setNewAccountType(e.target.value)}
-                                                        placeholder="새 항목..."
-                                                        className="flex-1 w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        onKeyDown={(e) => e.key === 'Enter' && addAccountType()}
-                                                    />
-                                                    <button onClick={(e) => { e.preventDefault(); addAccountType(); }} className="bg-slate-200 hover:bg-slate-300 text-slate-700 p-1.5 rounded transition-colors">
-                                                        <Plus size={16} />
-                                                    </button>
-                                                </div>
+                                    {activeTab !== 'car' && (
+                                        <>
+                                            <div className="flex flex-col gap-1 min-w-[120px]">
+                                                <label className="text-xs font-semibold text-slate-500">거래 조건 (매수/매도)</label>
+                                                <select name="action" value={formData.action} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm">
+                                                    <option value="buy">매수 (Buy)</option>
+                                                    <option value="sell">매도 (Sell)</option>
+                                                </select>
                                             </div>
-                                        )}
-                                    </div>
+                                            <div className="flex flex-col gap-1 min-w-[130px]">
+                                                <label className="text-xs font-semibold text-slate-500">날짜</label>
+                                                <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                            </div>
+                                            <div className="flex flex-col gap-1 min-w-[130px] relative">
+                                                <label className="text-xs font-semibold text-slate-500">구분 (계좌)</label>
+                                                <div
+                                                    className="border border-slate-300 rounded px-2 py-1.5 text-sm flex justify-between items-center cursor-pointer bg-white"
+                                                    onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
+                                                >
+                                                    <span className={formData.account ? "text-slate-900" : "text-slate-400"}>
+                                                        {formData.account || "일반"}
+                                                    </span>
+                                                    <ChevronDown size={16} className="text-slate-400" />
+                                                </div>
+                                                {isAccountDropdownOpen && (
+                                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
+                                                        {accountTypes.map((type, idx) => (
+                                                            <div key={idx} className="flex justify-between items-center px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => handleAccountSelect(type)}>
+                                                                <span className="text-sm font-medium text-slate-700">{type}</span>
+                                                                <button
+                                                                    onClick={(e) => removeAccountType(type, e)}
+                                                                    className="text-slate-300 hover:text-red-500 p-1"
+                                                                    title="삭제"
+                                                                >
+                                                                    <Trash size={14} />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        <div className="p-2 flex gap-2 border-t border-slate-200 bg-slate-50">
+                                                            <input
+                                                                type="text"
+                                                                value={newAccountType}
+                                                                onChange={(e) => setNewAccountType(e.target.value)}
+                                                                placeholder="새 항목..."
+                                                                className="flex-1 w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onKeyDown={(e) => e.key === 'Enter' && addAccountType()}
+                                                            />
+                                                            <button onClick={(e) => { e.preventDefault(); addAccountType(); }} className="bg-slate-200 hover:bg-slate-300 text-slate-700 p-1.5 rounded transition-colors">
+                                                                <Plus size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                    {activeTab === 'car' && (
+                                        <div className="flex flex-col gap-1 min-w-[130px]">
+                                            <label className="text-xs font-semibold text-slate-500">구입일자</label>
+                                            <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                        </div>
+                                    )}
                                     <div className="flex flex-col md:flex-row gap-3">
-                                        {(activeTab === 'stock' || activeTab === 'cash') && (
+                                        {(['stock', 'cash'].includes(activeTab)) && (
                                             <div className="flex flex-col gap-1 min-w-[100px]">
                                                 <label className="text-xs font-semibold text-slate-500">결제 통화</label>
                                                 <select name="region" value={formData.region} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm bg-slate-50">
@@ -628,51 +730,53 @@ export default function EntryPage() {
                                             </div>
                                         )}
                                     </div>
-                                    {(activeTab === 'stock' || activeTab === 'pension') ? (
+                                    {(activeTab === 'stock' || activeTab === 'pension' || activeTab === 'crypto') ? (
                                         <div className="flex flex-col gap-1 min-w-[200px] flex-1 relative">
-                                            <label className="text-xs font-semibold text-slate-500">자산 종목 (코드 - 이름)</label>
+                                            <label className="text-xs font-semibold text-slate-500">
+                                                {activeTab === 'crypto' ? '자산 명칭 (티커 - 이름)' : '자산 종목 (코드 - 이름)'}
+                                            </label>
                                             <div
                                                 className="border border-slate-300 rounded px-2 py-1.5 text-sm flex justify-between items-center cursor-pointer bg-white"
                                                 onClick={() => setIsStockItemDropdownOpen(!isStockItemDropdownOpen)}
                                             >
                                                 <span className={(formData.symbol || formData.name) ? "text-slate-900" : "text-slate-400"}>
-                                                    {formData.symbol && formData.name ? `${formData.symbol} - ${formData.name}` : formData.name || formData.symbol || "종목 선택 또는 추가..."}
+                                                    {formData.symbol && formData.name ? `${formData.symbol} - ${formData.name}` : formData.name || formData.symbol || (activeTab === 'crypto' ? "코인 선택 또는 추가..." : "종목 선택 또는 추가...")}
                                                 </span>
                                                 <ChevronDown size={16} className="text-slate-400" />
                                             </div>
                                             {isStockItemDropdownOpen && (
-                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-60 overflow-y-auto w-full md:min-w-[320px]">
-                                                    {(activeTab === 'pension' ? (savedPensionItems || []) : (savedStockItems || [])).map((item, idx) => (
-                                                        <div key={idx} className="flex justify-between items-center px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => handleStockItemSelect(item)}>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-sm font-bold text-slate-700 uppercase">{item.symbol}</span>
+                                                <div className="absolute top-full right-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-64 overflow-y-auto w-[280px] sm:w-[340px] md:w-[380px] min-w-full">
+                                                    {(activeTab === 'pension' ? (savedPensionItems || []) : (activeTab === 'crypto' ? (savedCryptoItems || []) : (savedStockItems || []))).map((item, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center px-4 py-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onClick={() => handleStockItemSelect(item)}>
+                                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                                <span className="text-sm font-bold text-slate-700 uppercase whitespace-nowrap">{item.symbol}</span>
                                                                 <span className="text-xs text-slate-400">-</span>
-                                                                <span className="text-sm font-medium text-slate-600">{item.name}</span>
+                                                                <span className="text-sm font-medium text-slate-600 truncate">{item.name}</span>
                                                             </div>
                                                             <button
                                                                 onClick={(e) => removeStockItem(item, e)}
-                                                                className="text-slate-300 hover:text-red-500 p-1"
+                                                                className="text-slate-300 hover:text-red-500 p-1.5 ml-2 flex-shrink-0"
                                                                 title="삭제"
                                                             >
                                                                 <Trash size={14} />
                                                             </button>
                                                         </div>
                                                     ))}
-                                                    <div className="p-2 flex flex-col sm:flex-row gap-2 border-t border-slate-200 bg-slate-50">
+                                                    <div className="p-3 flex flex-col sm:flex-row gap-2 border-t border-slate-200 bg-slate-50">
                                                         <input
                                                             type="text"
                                                             value={newStockSymbol}
                                                             onChange={(e) => setNewStockSymbol(e.target.value)}
-                                                            placeholder="코드(Ex: AAPL)"
-                                                            className="w-[100px] sm:w-[80px] border border-slate-300 rounded px-2 py-1 text-sm bg-white uppercase"
+                                                            placeholder={activeTab === 'crypto' ? "티커(BTC)" : "코드(AAPL)"}
+                                                            className="w-full sm:w-[90px] min-w-0 border border-slate-300 rounded px-2.5 py-1.5 text-sm bg-white uppercase"
                                                             onClick={(e) => e.stopPropagation()}
                                                         />
                                                         <input
                                                             type="text"
                                                             value={newStockName}
                                                             onChange={(e) => setNewStockName(e.target.value)}
-                                                            placeholder="이름(Ex: 애플)"
-                                                            className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+                                                            placeholder={activeTab === 'crypto' ? "이름(비트코인)" : "이름(애플)"}
+                                                            className="flex-1 min-w-0 border border-slate-300 rounded px-2.5 py-1.5 text-sm bg-white"
                                                             onClick={(e) => e.stopPropagation()}
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter') {
@@ -681,7 +785,7 @@ export default function EntryPage() {
                                                                 }
                                                             }}
                                                         />
-                                                        <button onClick={(e) => { e.preventDefault(); addStockItem(); }} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded transition-colors whitespace-nowrap text-sm font-bold">
+                                                        <button onClick={(e) => { e.preventDefault(); addStockItem(); }} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-1.5 rounded transition-colors whitespace-nowrap text-sm font-bold h-[34px] sm:h-auto shrink-0">
                                                             추가
                                                         </button>
                                                     </div>
@@ -692,27 +796,74 @@ export default function EntryPage() {
                                         <>
                                             {(activeTab !== 'gold') && (
                                                 <div className="flex flex-col gap-1 min-w-[120px]">
-                                                    <label className="text-xs font-semibold text-slate-500">종목코드 (선택)</label>
-                                                    <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder="Ex: NH" className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
+                                                    <label className="text-xs font-semibold text-slate-500">
+                                                        {activeTab === 'car' ? '차량 번호 / 관리 코드' : '종목코드 (선택)'}
+                                                    </label>
+                                                    <input name="symbol" value={formData.symbol} onChange={handleInputChange} placeholder={activeTab === 'car' ? "12가 3456" : "Ex: NH"} className="border border-slate-300 rounded px-2 py-1.5 text-sm uppercase" />
                                                 </div>
                                             )}
                                             <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
-                                                <label className="text-xs font-semibold text-slate-500">{activeTab === 'gold' ? '자산 이름 (금)' : '자산 이름'}</label>
-                                                <input name="name" value={formData.name} onChange={handleInputChange} placeholder={activeTab === 'gold' ? "Ex: 골드바, 돌반지" : "Ex: 삼성전자"} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                                <label className="text-xs font-semibold text-slate-500">
+                                                    {activeTab === 'gold' ? '자산 이름 (금)' : activeTab === 'car' ? '차량 모델명' : '자산 이름'}
+                                                </label>
+                                                <input name="name" value={formData.name} onChange={handleInputChange} placeholder={activeTab === 'gold' ? "Ex: 골드바, 돌반지" : activeTab === 'car' ? "Ex: 쏘나타 (Hybrid)" : "Ex: 삼성전자"} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
                                             </div>
                                         </>
                                     )}
                                     <div className="flex flex-col gap-1 min-w-[120px]">
-                                        <label className="text-xs font-semibold text-slate-500">{activeTab === 'gold' ? '매수 단가 (1돈당)' : '체결 단가 (환율)'}</label>
+                                        <label className="text-xs font-semibold text-slate-500">
+                                            {activeTab === 'gold' ? '매수 단가 (1돈당)' : activeTab === 'car' ? '차량 매수가' : (['stock', 'pension', 'crypto'].includes(activeTab)) ? '체결 단가' : '체결 단가 (환율)'}
+                                        </label>
                                         <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder={activeTab === 'cash' ? "원화는 1" : "0"} className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
                                     </div>
-                                    <div className="flex flex-col gap-1 min-w-[100px]">
-                                        <label className="text-xs font-semibold text-slate-500">{activeTab === 'gold' ? '거래 수량 (돈)' : '거래 수량'}</label>
-                                        <input type="number" name="quantity" value={formData.quantity} onChange={handleInputChange} placeholder="0" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
-                                    </div>
+                                    {activeTab !== 'car' && (
+                                        <div className="flex flex-col gap-1 min-w-[100px]">
+                                            <label className="text-xs font-semibold text-slate-500">
+                                                {activeTab === 'gold' ? '거래 수량 (돈)' : '거래 수량'}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="quantity"
+                                                value={formData.quantity}
+                                                onChange={handleInputChange}
+                                                placeholder="0"
+                                                step="any"
+                                                className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono"
+                                            />
+                                        </div>
+                                    )}
                                 </>
                             )}
-                            <div className="flex flex-col justify-end gap-2 flex-row">
+                            {activeTab !== 'cash' && (
+                                <div className="flex flex-col gap-1 w-full mt-2 pt-3 border-t border-slate-100">
+                                    <label className="text-xs font-semibold text-slate-700">
+                                        <span className="text-[#0d7ff2]">연동 현금결제 계좌</span> (자동 증감 처리)
+                                    </label>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                        <select
+                                            name="linkedCashAssetId"
+                                            value={formData.linkedCashAssetId || ''}
+                                            onChange={handleInputChange}
+                                            className="border border-slate-300 rounded px-3 py-2 text-sm max-w-sm focus:border-[#0d7ff2] focus:ring-1 focus:ring-[#0d7ff2] outline-none transition-shadow"
+                                        >
+                                            <option value="">선택 안함 (연동 끄기)</option>
+                                            {cashAssets.map(c => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.name} ({c.region === 'US' ? 'USD ' : 'KRW '}{c.quantity.toLocaleString('ko-KR')})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="text-xs text-slate-500 max-w-lg bg-slate-50 p-2 rounded">
+                                            {formData.region === 'US' && currentExchangeRate ? (
+                                                <>저장 시 <strong>적용 환율({currentExchangeRate.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원)</strong>을 곱한 총 금액이 선택한 현금 자산에 자동 {formData.action === 'buy' ? '차감' : '추가'}됩니다.</>
+                                            ) : (
+                                                <>저장 시 거래 총 금액만큼 선택한 현금 자산에 자동으로 {formData.action === 'buy' ? '차감' : '추가'}됩니다.</>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex flex-col justify-end gap-2 flex-row w-full sm:w-auto mt-2 sm:mt-0 sm:ml-auto items-end">
                                 {editingId && (
                                     <button onClick={cancelEdit} disabled={loading} className="h-[34px] px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 font-semibold rounded shadow-sm transition-colors flex items-center justify-center gap-1">
                                         <X size={16} /> 취소
@@ -779,17 +930,25 @@ export default function EntryPage() {
                                             <th className="px-4 py-3 font-semibold text-right">총액</th>
                                             <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
                                         </tr>
+                                    ) : activeTab === 'car' ? (
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">날짜</th>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">차량번호</th>
+                                            <th className="px-4 py-3 font-semibold min-w-[150px] text-left">이름</th>
+                                            <th className="px-4 py-3 font-semibold text-right">매수가</th>
+                                            <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
+                                        </tr>
                                     ) : (
                                         <tr>
                                             <th className="px-4 py-3 font-semibold text-center w-16">국가</th>
-                                            <th className="px-4 py-3 font-semibold w-24">구분</th>
-                                            <th className="px-4 py-3 font-semibold w-24">유형</th>
-                                            <th className="px-4 py-3 font-semibold w-24">날짜</th>
-                                            <th className="px-4 py-3 font-semibold w-24">종목코드</th>
-                                            <th className="px-4 py-3 font-semibold min-w-[150px]">이름</th>
-                                            <th className="px-4 py-3 font-semibold text-right">체결 단가</th>
-                                            <th className="px-4 py-3 font-semibold text-right">수량</th>
-                                            <th className="px-4 py-3 font-semibold text-right">총액</th>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">구분</th>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">유형</th>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">날짜</th>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">종목코드</th>
+                                            <th className="px-4 py-3 font-semibold min-w-[150px] text-left">이름</th>
+                                            <th className="px-4 py-3 font-semibold text-right text-left">체결 단가</th>
+                                            <th className="px-4 py-3 font-semibold text-right text-left">수량</th>
+                                            <th className="px-4 py-3 font-semibold text-right text-left">총액</th>
                                             <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
                                         </tr>
                                     )}
@@ -861,7 +1020,7 @@ export default function EntryPage() {
                                     ) : (
                                         filteredTransactions.length === 0 ? (
                                             <tr>
-                                                <td colSpan={activeTab === 'cash' ? "6" : "10"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
+                                                <td colSpan={activeTab === 'cash' ? "6" : activeTab === 'car' ? "5" : "10"} className="p-8 text-center text-slate-500">해당 카테고리의 거래 내역이 없습니다. (No Transactions)</td>
                                             </tr>
                                         ) : (
                                             filteredTransactions.slice(0, visibleCount).map(trx => (
@@ -880,6 +1039,13 @@ export default function EntryPage() {
                                                             <td className={`px-4 py-3 font-bold text-center ${trx.action === 'buy' ? 'text-green-500' : 'text-[#ff4d4f]'}`}>
                                                                 {trx.action === 'buy' ? '증가' : '감소'}
                                                             </td>
+                                                        </>
+                                                    ) : activeTab === 'car' ? (
+                                                        <>
+                                                            <td className="px-4 py-3 text-slate-500">{trx.date}</td>
+                                                            <td className="px-4 py-3 font-medium text-slate-900">{trx.symbol || '-'}</td>
+                                                            <td className="px-4 py-3 text-slate-800 font-bold">{trx.name}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">{formatCurrency(trx.price * trx.quantity, trx.region)}</td>
                                                         </>
                                                     ) : activeTab === 'gold' ? (
                                                         <>
