@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
+import { collection, getDocs, getDoc, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
 import { default as YahooFinance } from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic';
@@ -177,7 +177,7 @@ export async function GET() {
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry, linkedCashAssetId, exchangeRate } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -287,6 +287,65 @@ export async function POST(request) {
             account: account || '일반',
             createdAt: serverTimestamp()
         });
+
+        // 3. Handle Linked Cash Asset if provided
+        if (linkedCashAssetId) {
+            try {
+                // Find cash asset
+                const cashDocRef = doc(db, 'assets', linkedCashAssetId);
+                const cashSnapshot = await getDoc(cashDocRef);
+
+                if (cashSnapshot.exists() && cashSnapshot.data().type === 'cash') {
+                    const cashAsset = { id: cashSnapshot.id, ...cashSnapshot.data() };
+
+                    // Calculate total cost
+                    let totalCost = type === 'real_estate'
+                        ? (prc * qty) + (parseFloat(expense) || 0) - (parseFloat(deposit) || 0)
+                        : qty * prc;
+
+                    if (region === 'US') {
+                        const rate = parseFloat(exchangeRate) || 1400;
+                        totalCost = totalCost * rate;
+                    }
+
+                    let newCashQty = cashAsset.quantity;
+                    const cashAction = action === 'buy' ? 'sell' : 'buy'; // If buying asset, selling(deducting) cash
+
+                    if (action === 'buy') {
+                        newCashQty = cashAsset.quantity - totalCost;
+                    } else if (action === 'sell') {
+                        newCashQty = cashAsset.quantity + totalCost;
+                    }
+
+                    // Update cash asset
+                    await updateDoc(cashDocRef, {
+                        quantity: newCashQty,
+                        principal: newCashQty * (cashAsset.avgPrice || 1), // Optional depending on how cash avgPrice is handled
+                        updatedAt: serverTimestamp()
+                    });
+
+                    // Add transaction for cash asset
+                    await addDoc(trxRef, {
+                        asset_id: cashAsset.id,
+                        action: cashAction,
+                        date,
+                        quantity: totalCost,
+                        price: 1, // Cash price is essentially 1 in its currency
+                        region: cashAsset.region,
+                        investmentCountry: cashAsset.investmentCountry || cashAsset.region,
+                        type: 'cash',
+                        name: cashAsset.name,
+                        symbol: cashAsset.symbol || cashAsset.name,
+                        account: cashAsset.account || '일반',
+                        memo: '자동 연동', // Flag or description for automatic sync
+                        createdAt: serverTimestamp()
+                    });
+                }
+            } catch (cashError) {
+                console.error("Failed to update linked cash asset:", cashError);
+                // Non-fatal error for the main asset creation
+            }
+        }
 
         return NextResponse.json({ success: true, id: assetId }, { status: 201 });
     } catch (error) {

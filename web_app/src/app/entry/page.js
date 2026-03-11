@@ -45,7 +45,8 @@ export default function EntryPage() {
         expense: '',
         deposit: '',
         realEstateCurrentPrice: '',
-        goldCurrentPrice: ''
+        goldCurrentPrice: '',
+        linkedCashAssetId: ''
     });
 
     useEffect(() => {
@@ -115,6 +116,7 @@ export default function EntryPage() {
             price: '',
             expense: '',
             deposit: '',
+            linkedCashAssetId: ''
         });
         setEditingId(null);
         setVisibleCount(10);
@@ -268,7 +270,7 @@ export default function EntryPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '', linkedCashAssetId: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -387,9 +389,11 @@ export default function EntryPage() {
                     price: parseFloat(formData.price),
                     expense: parseFloat(formData.expense) || 0,
                     deposit: parseFloat(formData.deposit) || 0,
-                    realEstateCurrentPrice: parseFloat(formData.realEstateCurrentPrice) || parseFloat(formData.price)
+                    realEstateCurrentPrice: parseFloat(formData.realEstateCurrentPrice) || parseFloat(formData.price),
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
                 });
-                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '' }));
+                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', linkedCashAssetId: '' }));
             } else if (activeTab === 'car') {
                 await addAsset({
                     type: activeTab,
@@ -401,9 +405,11 @@ export default function EntryPage() {
                     symbol: formData.symbol.toUpperCase(),
                     name: formData.name,
                     quantity: 1,
-                    price: parseFloat(formData.price)
+                    price: parseFloat(formData.price),
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
                 });
-                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '' }));
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', linkedCashAssetId: '' }));
             } else {
                 await addAsset({
                     type: activeTab,
@@ -416,10 +422,12 @@ export default function EntryPage() {
                     name: formData.name,
                     quantity: parseFloat(formData.quantity),
                     price: parseFloat(formData.price),
-                    goldCurrentPrice: parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price)
+                    goldCurrentPrice: parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price),
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
                 });
 
-                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '' }));
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '', linkedCashAssetId: '' }));
             }
         } catch (e) {
             console.error("오류 발생: " + e.message);
@@ -437,6 +445,7 @@ export default function EntryPage() {
     const filteredTransactions = transactions?.filter(t => t.type === activeTab) || [];
     const filteredAssets = assets.filter(a => a.type === activeTab);
     const totalCategoryValue = filteredAssets.reduce((sum, a) => sum + (a.totalValue || 0), 0);
+    const cashAssets = assets.filter(a => a.type === 'cash');
 
     if (!mounted) {
         return (
@@ -793,7 +802,36 @@ export default function EntryPage() {
                                     )}
                                 </>
                             )}
-                            <div className="flex flex-col justify-end gap-2 flex-row">
+                            {activeTab !== 'cash' && (
+                                <div className="flex flex-col gap-1 w-full mt-2 pt-3 border-t border-slate-100">
+                                    <label className="text-xs font-semibold text-slate-700">
+                                        <span className="text-[#0d7ff2]">연동 현금결제 계좌</span> (자동 증감 처리)
+                                    </label>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                        <select
+                                            name="linkedCashAssetId"
+                                            value={formData.linkedCashAssetId || ''}
+                                            onChange={handleInputChange}
+                                            className="border border-slate-300 rounded px-3 py-2 text-sm max-w-sm focus:border-[#0d7ff2] focus:ring-1 focus:ring-[#0d7ff2] outline-none transition-shadow"
+                                        >
+                                            <option value="">선택 안함 (연동 끄기)</option>
+                                            {cashAssets.map(c => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.name} ({c.region === 'US' ? 'USD ' : 'KRW '}{c.quantity.toLocaleString('ko-KR')})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="text-xs text-slate-500 max-w-lg bg-slate-50 p-2 rounded">
+                                            {formData.region === 'US' && currentExchangeRate ? (
+                                                <>저장 시 <strong>적용 환율({currentExchangeRate.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원)</strong>을 곱한 총 금액이 선택한 현금 자산에 자동 {formData.action === 'buy' ? '차감' : '추가'}됩니다.</>
+                                            ) : (
+                                                <>저장 시 거래 총 금액만큼 선택한 현금 자산에 자동으로 {formData.action === 'buy' ? '차감' : '추가'}됩니다.</>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex flex-col justify-end gap-2 flex-row w-full sm:w-auto mt-2 sm:mt-0 sm:ml-auto items-end">
                                 {editingId && (
                                     <button onClick={cancelEdit} disabled={loading} className="h-[34px] px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 font-semibold rounded shadow-sm transition-colors flex items-center justify-center gap-1">
                                         <X size={16} /> 취소
