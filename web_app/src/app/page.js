@@ -569,18 +569,19 @@ export default function Dashboard() {
                       { value: '합계(Line)', type: 'line', id: 'includedTotal', color: '#0f172a' }
                     ]}
                   />
-                  {(enabledAssetTypes || []).map((typeId, index) => {
+                  {(enabledAssetTypes || []).map((typeId) => {
                     const meta = ASSET_META[typeId];
                     if (!meta || !includeMap[typeId]) return null;
                     return (
-                      <Bar
+                      <Line
                         key={typeId}
+                        type="monotone"
                         dataKey={HISTORY_KEYS[typeId]}
                         name={meta.label}
-                        stackId="a"
-                        fill={meta.color}
-                        radius={index === (enabledAssetTypes || []).length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
-                        barSize={20}
+                        stroke={meta.color}
+                        strokeWidth={2}
+                        dot={{ r: 2, fill: meta.color }}
+                        activeDot={{ r: 4 }}
                       />
                     );
                   })}
@@ -591,7 +592,7 @@ export default function Dashboard() {
                     strokeWidth={2}
                     dot={{ r: 2, fill: '#0f172a' }}
                     activeDot={{ r: 4 }}
-                    name="includedTotal"
+                    name="전체"
                   />
                 </ComposedChart>
               </ResponsiveContainer>
