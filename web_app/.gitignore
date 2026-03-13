@@ -43,3 +43,12 @@ next-env.d.ts
 
 # firebase
 /.firebase/
+
+# AI tools
+.gemini/
+.bkit-memory.json
+.pdca-status.json
+docs/.bkit-memory.json
+docs/.pdca-status.json
+**/*.snapshot
+**/snapshots/

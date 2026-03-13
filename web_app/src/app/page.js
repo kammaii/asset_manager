@@ -144,7 +144,7 @@ export default function Dashboard() {
   const displayTotalPrincipal = displayTotalAssets - displayTotalProfit;
   const displayProfitRate = displayTotalPrincipal > 0 ? (displayTotalProfit / displayTotalPrincipal) * 100 : 0;
 
-  const achievementRate = targetTotalAmount > 0 ? (displayTotalAssets / targetTotalAmount) * 100 : 0;
+  const achievementRate = targetTotalAmount > 0 ? (summary.totalAssets / targetTotalAmount) * 100 : 0;
 
   // 리밸런싱 알림 계산
   const rebalancingAlerts = [];
@@ -345,40 +345,50 @@ export default function Dashboard() {
         </div>
 
         {/* Top Summary Cards */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-${Math.min((enabledAssetTypes || []).length + 1, 6)} gap-4`}>
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1">
-            <div className="flex justify-between items-center relative z-10">
-              <p className="text-sm font-medium text-slate-500 flex flex-col">
-                <span>전체 자산</span>
-                <span className="text-[11px] opacity-70">Total Assets</span>
-              </p>
-            </div>
-            <div className="flex items-end gap-2 mt-1 relative z-10">
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
-            </div>
-            <p className="text-[11px] text-slate-500 relative z-10 font-medium">미선택 자산 포함: {formatCurrency(summary.totalAssets)}</p>
-            <div className="flex flex-col mt-1 text-xs font-bold relative z-10">
-              <div className={`flex items-center gap-1 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-                {displayTotalProfit >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="sm:col-span-2 p-6 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden group">
+            <div className="flex-1 flex flex-col gap-1 w-full">
+              <div className="flex justify-between items-center relative z-10">
+                <p className="text-sm font-medium text-slate-500 flex flex-col">
+                  <span>전체 자산 요약</span>
+                  <span className="text-[11px] opacity-70">Portfolio Summary</span>
+                </p>
+              </div>
+              <div className="flex items-end gap-2 mt-1 relative z-10">
+                <span className="text-3xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
+              </div>
+
+              <div className={`flex items-center gap-2 mt-2 text-sm font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+                {displayTotalProfit >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
                 <span>{displayTotalProfit > 0 ? '+' : ''}{formatCurrency(displayTotalProfit)}</span>
                 <span className="opacity-80">({formatPercent(displayProfitRate)})</span>
               </div>
-              {targetTotalAmount > 0 && (
-                <div className="mt-2 pt-2 border-t border-slate-100">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] text-slate-400 font-medium">목표 달성률</span>
-                    <span className="text-[11px] text-blue-600 font-black">{achievementRate.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000"
-                      style={{ width: `${Math.min(achievementRate, 100)}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-[9px] text-slate-400 mt-1 text-right">목표: {formatCurrency(targetTotalAmount)}</p>
-                </div>
-              )}
             </div>
+
+            {targetTotalAmount > 0 && (
+              <div className="flex-1 w-full bg-slate-50/50 p-4 rounded-lg border border-slate-100 relative z-10">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">목표 달성 현황</span>
+                  <span className="text-sm text-blue-600 font-black">{achievementRate.toFixed(1)}%</span>
+                </div>
+                <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden mb-2">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                    style={{ width: `${Math.min(achievementRate, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between items-end">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-medium">현재 총액</span>
+                    <span className="text-xs font-bold text-slate-700">{formatCurrency(summary.totalAssets)}</span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-slate-400 font-medium">최종 목표</span>
+                    <span className="text-xs font-bold text-slate-900">{formatCurrency(targetTotalAmount)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {sortedEnabledTypes.map(typeId => {
