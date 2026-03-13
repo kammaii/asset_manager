@@ -131,20 +131,21 @@ export default function Dashboard() {
     return PREFERRED_ORDER.indexOf(a) - PREFERRED_ORDER.indexOf(b);
   });
 
-  const displayTotalAssets = sortedEnabledTypes.reduce((sum, type) => {
+  const displayTotalAssets = (enabledAssetTypes || []).reduce((sum, type) => {
     const key = SUMMARY_KEYS[type];
-    return sum + (includeMap[type] && key ? (summary[key.total] || 0) : 0);
+    return sum + (key ? (summary[key.total] || 0) : 0);
   }, 0);
 
   const displayTotalProfit = (enabledAssetTypes || []).reduce((sum, type) => {
     const key = SUMMARY_KEYS[type];
-    return sum + (includeMap[type] && key ? (summary[key.profit] || 0) : 0);
+    return sum + (key ? (summary[key.profit] || 0) : 0);
   }, 0);
 
   const displayTotalPrincipal = displayTotalAssets - displayTotalProfit;
   const displayProfitRate = displayTotalPrincipal > 0 ? (displayTotalProfit / displayTotalPrincipal) * 100 : 0;
 
-  const achievementRate = targetTotalAmount > 0 ? (summary.totalAssets / targetTotalAmount) * 100 : 0;
+  const achievementRate = targetTotalAmount > 0 ? (displayTotalAssets / targetTotalAmount) * 100 : 0;
+
 
   // 리밸런싱 알림 계산
   const rebalancingAlerts = [];
@@ -176,6 +177,13 @@ export default function Dashboard() {
     }
   }
 
+  // 그래프용 포함된 자산 합계 계산
+  const includedTotalAssets = (enabledAssetTypes || []).reduce((sum, typeId) => {
+    if (!includeMap[typeId]) return sum;
+    const key = SUMMARY_KEYS[typeId];
+    return sum + (key ? (summary[key.total] || 0) : 0);
+  }, 0);
+
   // Process data for charts
   let allocationTitle = '비중 확인 (Allocation)';
   let displayAllocation = [];
@@ -185,9 +193,14 @@ export default function Dashboard() {
     displayAllocation = (enabledAssetTypes || []).map(type => {
       const meta = ASSET_META[type];
       const key = SUMMARY_KEYS[type];
-      if (!meta || !key || !includeMap[type]) return null;
-      return { name: meta.label, value: summary[key.total] || 0 };
-    }).filter(Boolean).filter(item => item.value > 0);
+      if (!meta || !key) return null;
+      const value = summary[key.total] || 0;
+      if (value <= 0) return null;
+      return { name: meta.label, value, typeId: type };
+    }).filter(Boolean);
+    
+    // 필터링 적용 (실제 차트에 보일 데이터)
+    displayAllocation = displayAllocation.filter(item => includeMap[item.typeId]);
   } else {
     allocationTitle = `${drillDownCategory} 상세 비중`;
     let items = [];
@@ -214,6 +227,16 @@ export default function Dashboard() {
     displayAllocation = items;
     drillDownTotal = items.reduce((sum, item) => sum + item.value, 0);
   }
+
+  // 범례 클릭 핸들러
+  const handleLegendClick = (data) => {
+    let typeId = data.typeId;
+    if (!typeId && data.value) {
+      // Line 차트 범례에서 온 경우 label로 찾기
+      typeId = Object.keys(ASSET_META).find(key => ASSET_META[key].label === data.value);
+    }
+    if (typeId) toggleInclude(typeId);
+  };
 
   const currentDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
   const todayDateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
@@ -378,11 +401,7 @@ export default function Dashboard() {
                   ></div>
                 </div>
                 <div className="flex justify-between items-end">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-400 font-medium">현재 총액</span>
-                    <span className="text-xs font-bold text-slate-700">{formatCurrency(summary.totalAssets)}</span>
-                  </div>
-                  <div className="flex flex-col items-end">
+                  <div className="flex flex-col items-end w-full">
                     <span className="text-[10px] text-slate-400 font-medium">최종 목표</span>
                     <span className="text-xs font-bold text-slate-900">{formatCurrency(targetTotalAmount)}</span>
                   </div>
@@ -398,7 +417,6 @@ export default function Dashboard() {
             const totalVal = summary[keys.total] || 0;
             const profitVal = summary[keys.profit] || 0;
             const rateVal = summary[keys.rate] || 0;
-            const isIncluded = includeMap[typeId];
 
             return (
               <div key={typeId} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col gap-1 relative overflow-hidden group">
@@ -408,12 +426,6 @@ export default function Dashboard() {
                     <span>{meta.label} 자산</span>
                     <span className="text-[11px] opacity-70">Total {meta.labelEn}</span>
                   </p>
-                  <button
-                    onClick={() => toggleInclude(typeId)}
-                    className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap transition-colors ${isIncluded ? meta.activeClass : 'bg-slate-200 text-slate-500'}`}
-                  >
-                    {isIncluded ? '포함' : '불포함'}
-                  </button>
                 </div>
                 <div className="flex items-end gap-2 mt-1 relative z-10">
                   <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(totalVal)}</span>
@@ -491,12 +503,12 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
-              {displayAllocation.length > 0 ? (
+              {displayAllocation.length > 0 || (drillDownCategory && displayAllocation.length > 0) ? (
                 <>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-sm font-medium text-slate-500">총합계</span>
                     <span className="text-xl font-bold text-slate-900 z-0">
-                      {formatCurrency(drillDownCategory ? drillDownTotal : displayTotalAssets)}
+                      {formatCurrency(drillDownCategory ? drillDownTotal : includedTotalAssets)}
                     </span>
                   </div>
                   <ResponsiveContainer width="100%" height={250} className="relative z-10">
@@ -533,19 +545,45 @@ export default function Dashboard() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-4 mt-6">
-              {displayAllocation.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: drillDownCategory ? DRILLDOWN_COLORS[item.name] : ASSET_COLORS[item.name] }}></span>
-                  <div className="flex flex-col">
-                    <span className="text-xs text-slate-500">{item.name}</span>
-                    <span className="text-sm font-bold text-slate-900">
-                      {(drillDownCategory ? drillDownTotal : displayTotalAssets) > 0
-                        ? ((item.value / (drillDownCategory ? drillDownTotal : displayTotalAssets)) * 100).toFixed(1)
-                        : 0}%
-                    </span>
+              {!drillDownCategory ? (
+                // 일반 모드: 전체 자산 유형 범례
+                (enabledAssetTypes || []).map((typeId) => {
+                  const meta = ASSET_META[typeId];
+                  if (!meta) return null;
+                  const value = summary[SUMMARY_KEYS[typeId]?.total] || 0;
+                  if (value <= 0) return null;
+                  
+                  const isIncluded = includeMap[typeId];
+                  return (
+                    <div 
+                      key={typeId} 
+                      className={`flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition-all ${!isIncluded ? 'opacity-40 grayscale-[0.5]' : ''}`}
+                      onClick={() => toggleInclude(typeId)}
+                    >
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: ASSET_COLORS[meta.label] }}></span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-slate-500">{meta.label}</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {includedTotalAssets > 0 ? ((value / includedTotalAssets) * 100).toFixed(1) : 0}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                // 드릴다운 모드: 상세 항목 범례 (한국, 미국, 원화 등)
+                displayAllocation.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2 p-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: DRILLDOWN_COLORS[item.name] }}></span>
+                    <div className="flex flex-col">
+                      <span className="text-xs text-slate-500">{item.name}</span>
+                      <span className="text-sm font-bold text-slate-900">
+                        {drillDownTotal > 0 ? ((item.value / drillDownTotal) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -570,11 +608,19 @@ export default function Dashboard() {
                   />
                   <Legend
                     iconType="circle"
-                    wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                    onClick={handleLegendClick}
+                    wrapperStyle={{ fontSize: '12px', paddingTop: '10px', cursor: 'pointer' }}
                     payload={[
                       ...((enabledAssetTypes || []).map(typeId => {
                         const meta = ASSET_META[typeId];
-                        return includeMap[typeId] && meta ? { value: meta.label, type: 'circle', id: HISTORY_KEYS[typeId], color: meta.color } : null;
+                        const isIncluded = includeMap[typeId];
+                        return meta ? { 
+                          value: meta.label, 
+                          type: 'circle', 
+                          id: HISTORY_KEYS[typeId], 
+                          color: isIncluded ? meta.color : '#cbd5e1', // 비활성 시 회색
+                          inactive: !isIncluded 
+                        } : null;
                       }).filter(Boolean)),
                       { value: '합계(Line)', type: 'line', id: 'includedTotal', color: '#0f172a' }
                     ]}
