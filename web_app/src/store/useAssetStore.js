@@ -16,6 +16,8 @@ const useAssetStore = create(
             savedCryptoItems: [],
             enabledAssetTypes: ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'],
             preferredIncludeMap: {}, // 대시보드 포함/불포함 설정값 (로컬 저장용)
+            targetAssetRatios: {},  // 목표 자산 비중 (Phase 3)
+            targetTotalAmount: 0,   // 목표 자산 총액 (Phase 3 추가)
             loading: false,
             error: null,
 
@@ -215,6 +217,8 @@ const useAssetStore = create(
                             }
                             return [...new Set(types)];
                         })(),
+                        targetAssetRatios: data.targetAssetRatios || {},
+                        targetTotalAmount: data.targetTotalAmount || 0,
                     });
                 } catch (error) {
                     console.error('Failed to load settings:', error);
@@ -330,7 +334,9 @@ const useAssetStore = create(
                 savedPensionItems: state.savedPensionItems,
                 savedCryptoItems: state.savedCryptoItems,
                 enabledAssetTypes: state.enabledAssetTypes,
-                preferredIncludeMap: state.preferredIncludeMap
+                preferredIncludeMap: state.preferredIncludeMap,
+                targetAssetRatios: state.targetAssetRatios,
+                targetTotalAmount: state.targetTotalAmount
             }),
         }
     )

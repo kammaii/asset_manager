@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAssetStore from '@/store/useAssetStore';
-import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft } from 'lucide-react';
+import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft, PieChart, Target, TrendingUp } from 'lucide-react';
 
 // 앱에서 지원하는 모든 자산 유형 정의
 const ALL_ASSET_TYPES = [
@@ -28,9 +28,11 @@ const COLOR_CLASSES = {
 };
 
 export default function SettingsPage() {
-    const { enabledAssetTypes, fetchSettings, updateSettings, loading } = useAssetStore();
+    const { enabledAssetTypes, targetAssetRatios, targetTotalAmount, fetchSettings, updateSettings, loading } = useAssetStore();
     const router = useRouter();
     const [localEnabled, setLocalEnabled] = useState([]);
+    const [localRatios, setLocalRatios] = useState({});
+    const [localTargetAmount, setLocalTargetAmount] = useState(0);
     const [mounted, setMounted] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -44,13 +46,19 @@ export default function SettingsPage() {
         if (enabledAssetTypes && enabledAssetTypes.length > 0) {
             setLocalEnabled([...enabledAssetTypes]);
         }
-    }, [enabledAssetTypes]);
+        if (targetAssetRatios) {
+            setLocalRatios({ ...targetAssetRatios });
+        }
+        if (targetTotalAmount !== undefined) {
+            setLocalTargetAmount(targetTotalAmount);
+        }
+    }, [enabledAssetTypes, targetAssetRatios, targetTotalAmount]);
 
     const toggleAssetType = (id) => {
         setLocalEnabled(prev => {
             if (prev.includes(id)) {
-                // 최소 1개는 남겨야 함
                 if (prev.length <= 1) return prev;
+                setLocalRatios(r => ({ ...r, [id]: 0 }));
                 return prev.filter(t => t !== id);
             } else {
                 return [...prev, id];
@@ -59,16 +67,41 @@ export default function SettingsPage() {
         setSaved(false);
     };
 
+    const handleRatioChange = (id, value) => {
+        const numValue = Math.max(0, Math.min(100, parseInt(value) || 0));
+        setLocalRatios(prev => ({
+            ...prev,
+            [id]: numValue
+        }));
+        setSaved(false);
+    };
+
+    const totalRatio = Object.entries(localRatios)
+        .filter(([id]) => localEnabled.includes(id))
+        .reduce((sum, [_, val]) => sum + val, 0);
+
     const handleSave = async () => {
+        if (totalRatio !== 100 && localEnabled.some(id => (localRatios[id] || 0) > 0)) {
+            if (!confirm(`현재 목표 비중의 합이 ${totalRatio}%입니다. 100%가 아니어도 저장하시겠습니까? (정확한 리밸런싱 조언을 위해 100% 설정을 권장합니다)`)) {
+                return;
+            }
+        }
+
         setSaving(true);
-        await updateSettings({ enabledAssetTypes: localEnabled });
+        await updateSettings({
+            enabledAssetTypes: localEnabled,
+            targetAssetRatios: localRatios,
+            targetTotalAmount: localTargetAmount
+        });
         setSaving(false);
         setSaved(true);
-        // 저장 후 바로 대시보드로 이동
         router.push('/');
     };
 
-    const hasChanges = JSON.stringify(localEnabled.sort()) !== JSON.stringify([...(enabledAssetTypes || [])].sort());
+    const hasChanges =
+        JSON.stringify(localEnabled.sort()) !== JSON.stringify([...(enabledAssetTypes || [])].sort()) ||
+        JSON.stringify(localRatios) !== JSON.stringify(targetAssetRatios || {}) ||
+        localTargetAmount !== targetTotalAmount;
 
     if (!mounted) {
         return (
@@ -102,7 +135,7 @@ export default function SettingsPage() {
             </header>
 
             {/* 메인 콘텐츠 */}
-            <main className="flex-1 w-full max-w-[800px] mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
+            <main className="flex-1 w-full max-w-[800px] mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8 pb-32">
                 {/* 뒤로가기 + 타이틀 */}
                 <div className="flex items-center gap-3">
                     <Link href="/" className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-500">
@@ -113,7 +146,7 @@ export default function SettingsPage() {
                             <Settings size={28} className="text-slate-400" />
                             설정
                         </h1>
-                        <p className="text-slate-500 text-sm mt-1">대시보드와 입력 페이지에 표시할 자산 탭을 편집합니다.</p>
+                        <p className="text-slate-500 text-sm mt-1">대시보드 표시 설정 및 리밸런싱 목표 비중을 편집합니다.</p>
                     </div>
                 </div>
 
@@ -173,33 +206,103 @@ export default function SettingsPage() {
                             );
                         })}
                     </div>
+                </div>
 
-                    {/* 저장 버튼 */}
-                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-                        <p className="text-xs text-slate-400">
-                            {localEnabled.length}개 자산 활성화됨
+                {/* 목표 자산 설정 영역 (Phase 3 추가) */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-200">
+                        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <TrendingUp size={20} className="text-green-500" />
+                            목표 자산 총액 설정
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            자산 관리의 최종 목표액을 설정하세요. 대시보드에서 달성률을 확인할 수 있습니다.
                         </p>
-                        <div className="flex items-center gap-3">
-                            {saved && (
-                                <span className="text-sm text-green-600 font-medium flex items-center gap-1 animate-pulse">
-                                    <Check size={16} /> 저장 완료!
-                                </span>
-                            )}
-                            <button
-                                onClick={handleSave}
-                                disabled={saving || !hasChanges}
-                                className={`
-                                    px-5 py-2.5 rounded-lg font-bold text-sm transition-all
-                                    ${hasChanges
-                                        ? 'bg-[#0d7ff2] hover:bg-blue-600 text-white shadow-sm'
-                                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                    }
-                                `}
-                            >
-                                {saving ? '저장 중...' : '변경 사항 저장'}
-                            </button>
+                    </div>
+                    <div className="p-6">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-bold text-slate-700">목표 자산 (원)</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={localTargetAmount > 0 ? localTargetAmount.toLocaleString() : ''}
+                                    onChange={(e) => {
+                                        const cleanValue = e.target.value.replace(/[^0-9]/g, '');
+                                        setLocalTargetAmount(parseInt(cleanValue) || 0);
+                                    }}
+                                    placeholder="예: 1,000,000,000"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-400 transition-all text-right pr-10"
+                                />
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-sans">원</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                                {localTargetAmount > 0 ? `(${(localTargetAmount / 100000000).toFixed(2)}억원)` : '목표 금액을 입력하세요.'}
+                            </p>
                         </div>
                     </div>
+                </div>
+
+                {/* 목표 자산 비중 설정 영역 (Phase 3) */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                <Target size={20} className="text-blue-500" />
+                                리밸런싱 목표 비중 설정
+                            </h2>
+                            <p className="text-sm text-slate-500 mt-1">
+                                각 자산군별 희망하는 목표 비중(%)을 설정하세요. AI가 이를 바탕으로 리밸런싱을 제안합니다.
+                            </p>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${totalRatio === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            합계: {totalRatio}%
+                        </div>
+                    </div>
+
+                    <div className="p-6 flex flex-col gap-4">
+                        {ALL_ASSET_TYPES.filter(t => localEnabled.includes(t.id)).map((assetType) => {
+                            const colorCls = COLOR_CLASSES[assetType.color];
+                            const ratio = localRatios[assetType.id] || 0;
+
+                            return (
+                                <div key={assetType.id} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${colorCls.bg} ${colorCls.text}`}>
+                                        <assetType.icon size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="text-sm font-bold text-slate-800">{assetType.label}</div>
+                                        <div className="text-[10px] text-slate-400 uppercase">{assetType.labelEn}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={ratio}
+                                            onChange={(e) => handleRatioChange(assetType.id, e.target.value)}
+                                            className="w-20 px-3 py-2 bg-white border border-slate-200 rounded-lg text-right font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all"
+                                            placeholder="0"
+                                            min="0"
+                                            max="100"
+                                        />
+                                        <span className="text-slate-400 font-medium">%</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {localEnabled.length === 0 && (
+                            <div className="text-center py-8 text-slate-400 text-sm">
+                                활성화된 자산이 없습니다. 위에서 자산 탭을 먼저 선택해주세요.
+                            </div>
+                        )}
+                    </div>
+
+                    {totalRatio !== 100 && (
+                        <div className="px-6 py-3 bg-amber-50 border-t border-amber-100 text-[11px] text-amber-700 flex items-center gap-2">
+                            <span className="w-4 h-4 rounded-full bg-amber-200 flex items-center justify-center font-bold">!</span>
+                            정확한 리밸런싱 조언을 위해 비중 합계를 100%로 맞추는 것을 권장합니다.
+                        </div>
+                    )}
                 </div>
 
                 {/* 안내 메시지 */}
@@ -216,6 +319,40 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </main>
+
+            {/* 하단 고정 저장 버튼 */}
+            <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+                <div className="max-w-[800px] mx-auto flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <p className="text-xs text-slate-400">
+                            {localEnabled.length}개 자산 탭 활성화됨
+                        </p>
+                        <p className="text-xs font-bold text-slate-600">
+                            목표 비중 합계: {totalRatio}%
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {saved && (
+                            <span className="text-sm text-green-600 font-medium flex items-center gap-1 animate-pulse">
+                                <Check size={16} /> 저장 완료!
+                            </span>
+                        )}
+                        <button
+                            onClick={handleSave}
+                            disabled={saving || !hasChanges}
+                            className={`
+                                px-8 py-3 rounded-xl font-bold text-base transition-all
+                                ${hasChanges
+                                    ? 'bg-[#0d7ff2] hover:bg-blue-600 text-white shadow-md active:scale-95'
+                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                }
+                            `}
+                        >
+                            {saving ? '저장 중...' : '설정 저장하기'}
+                        </button>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }

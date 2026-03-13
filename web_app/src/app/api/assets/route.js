@@ -167,7 +167,10 @@ export async function GET() {
             };
         }));
 
-        return NextResponse.json(enrichedAssets);
+        // 수량이 0인 자산 필터링 (보유하지 않은 자산 제외)
+        const activeAssets = enrichedAssets.filter(asset => asset.quantity > 0);
+
+        return NextResponse.json(activeAssets);
     } catch (error) {
         console.error('Error fetching assets:', error);
         return NextResponse.json({ error: 'Failed to fetch assets' }, { status: 500 });

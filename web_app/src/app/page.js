@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import useAssetStore from '@/store/useAssetStore';
-import { BarChart, Bar, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal, ArrowLeft, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car } from 'lucide-react';
-
+import { ComposedChart, Bar, Line, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal, ArrowLeft, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, AlertTriangle } from 'lucide-react';
+import AiAdvisor from '@/components/AiAdvisor';
+import AiInsights from '@/components/AiInsights';
 // 모든 자산 유형 메타데이터: id -> { label, labelEn, color(hex), bgColor, activeClass, icon }
 const ASSET_META = {
   stock: { label: '주식', labelEn: 'Stocks', color: '#3b82f6', bgClass: 'bg-blue-50', activeClass: 'bg-blue-100 text-blue-600', icon: CandlestickChart },
@@ -30,7 +31,7 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
   // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
   const includeMap = {};
@@ -143,6 +144,38 @@ export default function Dashboard() {
   const displayTotalPrincipal = displayTotalAssets - displayTotalProfit;
   const displayProfitRate = displayTotalPrincipal > 0 ? (displayTotalProfit / displayTotalPrincipal) * 100 : 0;
 
+  const achievementRate = targetTotalAmount > 0 ? (displayTotalAssets / targetTotalAmount) * 100 : 0;
+
+  // 리밸런싱 알림 계산
+  const rebalancingAlerts = [];
+  if (targetAssetRatios && Object.keys(targetAssetRatios).length > 0) {
+    const totalActualValue = (enabledAssetTypes || []).reduce((sum, type) => {
+      const key = SUMMARY_KEYS[type];
+      return sum + (key ? (summary[key.total] || 0) : 0);
+    }, 0);
+
+    if (totalActualValue > 0) {
+      Object.entries(targetAssetRatios).forEach(([type, targetPct]) => {
+        if (targetPct > 0) {
+          const key = SUMMARY_KEYS[type];
+          const actualValue = key ? (summary[key.total] || 0) : 0;
+          const actualPct = (actualValue / totalActualValue) * 100;
+          const diff = actualPct - targetPct;
+
+          if (Math.abs(diff) >= 5) {
+            rebalancingAlerts.push({
+              type,
+              label: ASSET_META[type]?.label || type,
+              actualPct,
+              targetPct,
+              diff
+            });
+          }
+        }
+      });
+    }
+  }
+
   // Process data for charts
   let allocationTitle = '비중 확인 (Allocation)';
   let displayAllocation = [];
@@ -233,6 +266,15 @@ export default function Dashboard() {
     })) : [];
   }
 
+  // 각 시점의 "포함된 자산 합계" 계산
+  chartHistory = chartHistory.map(item => {
+    const includedTotal = (enabledAssetTypes || []).reduce((sum, typeId) => {
+      if (!includeMap[typeId]) return sum;
+      return sum + (item[HISTORY_KEYS[typeId]] || 0);
+    }, 0);
+    return { ...item, includedTotal };
+  });
+
   // Fallback
   if (chartHistory.length === 0) {
     chartHistory = [
@@ -315,12 +357,27 @@ export default function Dashboard() {
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
             </div>
             <p className="text-[11px] text-slate-500 relative z-10 font-medium">미선택 자산 포함: {formatCurrency(summary.totalAssets)}</p>
-            <div className={`flex flex-col mt-1 text-xs font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
-              <div className="flex items-center gap-1">
-                {displayTotalProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+            <div className="flex flex-col mt-1 text-xs font-bold relative z-10">
+              <div className={`flex items-center gap-1 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
+                {displayTotalProfit >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 <span>{displayTotalProfit > 0 ? '+' : ''}{formatCurrency(displayTotalProfit)}</span>
+                <span className="opacity-80">({formatPercent(displayProfitRate)})</span>
               </div>
-              <span className="ml-[20px] opacity-80">({formatPercent(displayProfitRate)})</span>
+              {targetTotalAmount > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] text-slate-400 font-medium">목표 달성률</span>
+                    <span className="text-[11px] text-blue-600 font-black">{achievementRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000"
+                      style={{ width: `${Math.min(achievementRate, 100)}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-1 text-right">목표: {formatCurrency(targetTotalAmount)}</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -362,6 +419,49 @@ export default function Dashboard() {
             );
           })}
         </div>
+
+        <AiInsights />
+
+        {/* 리밸런싱 알림 섹션 */}
+        {rebalancingAlerts.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-1.5 bg-amber-100 rounded-lg text-amber-600">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="text-sm font-black text-amber-900">리밸런싱이 필요한 자산이 있습니다</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {rebalancingAlerts.map((alert) => (
+                <div key={alert.type} className="bg-white/60 p-3 rounded-lg border border-amber-100 flex flex-col gap-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-800 text-sm">{alert.label}</span>
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${alert.diff > 0 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                      {alert.diff > 0 ? '비중 초과' : '비중 부족'} ({Math.abs(alert.diff).toFixed(1)}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span>현재 {alert.actualPct.toFixed(1)}%</span>
+                    <span className="text-slate-300">→</span>
+                    <span className="font-medium">목표 {alert.targetPct}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('openAiAdvisor', {
+                    detail: { prompt: '내 목표 비중에 맞춰서 현재 포트폴리오를 어떻게 조정하면 좋을지 구체적인 매수/매도 금액을 제안해줘. (리밸런싱 상담)' }
+                  }));
+                }}
+                className="text-xs font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1 bg-amber-100/50 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                AI 어드바이저에게 리밸런싱 상담하기 →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -446,14 +546,14 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 w-full h-[250px] mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <ComposedChart data={chartHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="displayLabel" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => value === 0 ? '0' : `${parseFloat((value / 100000000).toFixed(2))}억`} />
                   <Tooltip
                     formatter={(value, name) => [
                       formatCurrency(value),
-                      name
+                      name === 'includedTotal' ? '선택 자산 합계' : name
                     ]}
                     labelFormatter={(label) => `시점: ${label}`}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
@@ -461,10 +561,13 @@ export default function Dashboard() {
                   <Legend
                     iconType="circle"
                     wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                    payload={(enabledAssetTypes || []).map(typeId => {
-                      const meta = ASSET_META[typeId];
-                      return includeMap[typeId] && meta ? { value: meta.label, type: 'circle', id: HISTORY_KEYS[typeId], color: meta.color } : null;
-                    }).filter(Boolean)}
+                    payload={[
+                      ...((enabledAssetTypes || []).map(typeId => {
+                        const meta = ASSET_META[typeId];
+                        return includeMap[typeId] && meta ? { value: meta.label, type: 'circle', id: HISTORY_KEYS[typeId], color: meta.color } : null;
+                      }).filter(Boolean)),
+                      { value: '합계(Line)', type: 'line', id: 'includedTotal', color: '#0f172a' }
+                    ]}
                   />
                   {(enabledAssetTypes || []).map((typeId, index) => {
                     const meta = ASSET_META[typeId];
@@ -476,11 +579,21 @@ export default function Dashboard() {
                         name={meta.label}
                         stackId="a"
                         fill={meta.color}
-                        radius={index === (enabledAssetTypes || []).length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                        radius={index === (enabledAssetTypes || []).length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
+                        barSize={20}
                       />
                     );
                   })}
-                </BarChart>
+                  <Line
+                    type="monotone"
+                    dataKey="includedTotal"
+                    stroke="#0f172a"
+                    strokeWidth={2}
+                    dot={{ r: 2, fill: '#0f172a' }}
+                    activeDot={{ r: 4 }}
+                    name="includedTotal"
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -488,11 +601,13 @@ export default function Dashboard() {
 
         {/* Portfolio Tables */}
         {sortedEnabledTypes.map(assetType => {
-          const filteredAssets = assets.filter(a => a.type === assetType).sort((a, b) => {
-            const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
-            const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
-            return valB - valA;
-          });
+          const filteredAssets = assets
+            .filter(a => a.type === assetType && (a.quantity > 0))
+            .sort((a, b) => {
+              const valA = (a.type === 'real_estate' ? (a.netInvestment || 0) + (a.profitGain || 0) : a.totalValue) * (a.region === 'US' ? (currentExchangeRate || 1400) : 1);
+              const valB = (b.type === 'real_estate' ? (b.netInvestment || 0) + (b.profitGain || 0) : b.totalValue) * (b.region === 'US' ? (currentExchangeRate || 1400) : 1);
+              return valB - valA;
+            });
           const meta = ASSET_META[assetType];
           if (!meta) return null;
           const title = meta.label;
@@ -712,6 +827,9 @@ export default function Dashboard() {
           </Link>
         </div>
       )}
+
+      {/* AI 어드바이저 챗봇 */}
+      <AiAdvisor />
     </div>
   );
 }

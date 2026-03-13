@@ -17,7 +17,7 @@ const getCachedQuote = async (symbol) => {
 };
 
 export const takeDailySnapshot = onSchedule({
-    schedule: "0 0 * * *", // Run at midnight every day
+    schedule: "30 23 * * *", // Run at 23:30 every day
     timeZone: "Asia/Seoul",
     memory: "256MiB",
     timeoutSeconds: 300 // Allow up to 5 minutes to fetch external prices
