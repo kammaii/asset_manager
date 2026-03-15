@@ -1,0 +1,14 @@
+# AI / Agentic tools
+.gemini/
+.pdca-snapshots/
+.pdca-status.json
+.bkit-memory.json
+docs/.pdca-snapshots/
+docs/.pdca-status.json
+docs/.bkit-memory.json
+**/.pdca-snapshots/
+**/.pdca-status.json
+**/.bkit-memory.json
+
+# Local OS
+.DS_Store
