@@ -22,6 +22,12 @@ const useAssetStore = create(
             error: null,
 
             fetchAssets: async () => {
+                const state = get();
+                if (state.loading) return; // 이미 로딩 중이면 중복 호출 방지
+                
+                // 데이터가 이미 있고, 5분 이내에 로드되었다면 다시 가져오지 않음 (선택적)
+                // if (state.assets.length > 0 && !force) return;
+
                 set({ loading: true, error: null });
                 try {
                     const res = await fetch('/api/assets');
@@ -29,9 +35,9 @@ const useAssetStore = create(
                     const data = await res.json();
 
                     // Generate savedStockItems and savedPensionItems from existing assets if not exist
-                    const state = get();
-                    const currentStockItems = [...(state.savedStockItems || [])];
-                    const currentPensionItems = [...(state.savedPensionItems || [])];
+                    const currentState = get();
+                    const currentStockItems = [...(currentState.savedStockItems || [])];
+                    const currentPensionItems = [...(currentState.savedPensionItems || [])];
                     let hasNewStockItem = false;
                     let hasNewPensionItem = false;
                     const updatePayload = {};
@@ -50,10 +56,9 @@ const useAssetStore = create(
                                 hasNewPensionItem = true;
                             }
                         } else if (asset.type === 'crypto' && asset.symbol && asset.name) {
-                            const exists = (state.savedCryptoItems || []).some(i => i.symbol === asset.symbol && i.name === asset.name);
+                            const exists = (currentState.savedCryptoItems || []).some(i => i.symbol === asset.symbol && i.name === asset.name);
                             if (!exists) {
-                                if (!updatePayload.savedCryptoItems) updatePayload.savedCryptoItems = [...(state.savedCryptoItems || [])];
-                                // Prevent duplicates within the payload in the same pass
+                                if (!updatePayload.savedCryptoItems) updatePayload.savedCryptoItems = [...(currentState.savedCryptoItems || [])];
                                 const payloadExists = updatePayload.savedCryptoItems.some(i => i.symbol === asset.symbol && i.name === asset.name);
                                 if (!payloadExists) {
                                     updatePayload.savedCryptoItems.push({ symbol: asset.symbol, name: asset.name });
@@ -63,18 +68,21 @@ const useAssetStore = create(
                     });
 
                     if (hasNewStockItem || hasNewPensionItem || updatePayload.savedCryptoItems) {
-                        // Update settings silently with the new generated items using current local state to merge if needed
                         if (hasNewStockItem) updatePayload.savedStockItems = currentStockItems;
                         if (hasNewPensionItem) updatePayload.savedPensionItems = currentPensionItems;
 
+                        // 비동기로 설정 저장 (메인 로직 흐름 방해 안함)
                         fetch('/api/settings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(updatePayload)
+                        }).catch(err => console.error("Failed to update settings silently", err));
+                        
+                        set({ 
+                            ...(hasNewStockItem && { savedStockItems: currentStockItems }),
+                            ...(hasNewPensionItem && { savedPensionItems: currentPensionItems }),
+                            ...(updatePayload.savedCryptoItems && { savedCryptoItems: updatePayload.savedCryptoItems })
                         });
-                        if (hasNewStockItem) set({ savedStockItems: currentStockItems });
-                        if (hasNewPensionItem) set({ savedPensionItems: currentPensionItems });
-                        if (updatePayload.savedCryptoItems) set({ savedCryptoItems: updatePayload.savedCryptoItems });
                     }
 
                     set({ assets: data, loading: false });
