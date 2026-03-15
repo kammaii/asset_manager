@@ -10,7 +10,25 @@ const AiInsights = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const fetchInsights = async () => {
+    const fetchInsights = async (force = false) => {
+        const CACHE_KEY = 'ai_insights_cache';
+        const CACHE_TIME_KEY = 'ai_insights_time';
+        const ASSETS_HASH_KEY = 'ai_insights_assets_hash';
+        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+        const currentAssetsHash = JSON.stringify(assets.map(a => ({ id: a.id, value: a.totalValue })));
+        const cachedInsights = localStorage.getItem(CACHE_KEY);
+        const cachedTime = localStorage.getItem(CACHE_TIME_KEY);
+        const cachedHash = localStorage.getItem(ASSETS_HASH_KEY);
+        const now = Date.now();
+
+        // 강제 새로고침이 아니고, 캐시가 유효하며, 자산 데이터가 변경되지 않았으면 캐시 사용
+        if (!force && cachedInsights && cachedTime && cachedHash === currentAssetsHash && (now - parseInt(cachedTime) < TWENTY_FOUR_HOURS)) {
+            setInsights(JSON.parse(cachedInsights));
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setError(null);
         try {
@@ -24,7 +42,11 @@ const AiInsights = () => {
             });
             if (!response.ok) throw new Error('인사이트를 가져오지 못했습니다.');
             const data = await response.json();
+            
             setInsights(data);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            localStorage.setItem(CACHE_TIME_KEY, now.toString());
+            localStorage.setItem(ASSETS_HASH_KEY, currentAssetsHash);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -34,9 +56,13 @@ const AiInsights = () => {
 
     useEffect(() => {
         if (assets && assets.length > 0) {
-            fetchInsights();
+            fetchInsights(false);
         }
-    }, [assets.length > 0]); // 자산이 처음으로 로드될 때 실행
+    }, [assets.length]); // 자산 개수가 변할 때만 체크 시도
+
+    const handleRefresh = () => {
+        fetchInsights(true);
+    };
 
     const getIcon = (type) => {
         switch (type) {
@@ -78,7 +104,7 @@ const AiInsights = () => {
                     <h2 className="text-lg font-bold text-gray-800">AI 투자 인사이트</h2>
                 </div>
                 <button
-                    onClick={fetchInsights}
+                    onClick={handleRefresh}
                     className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
                     title="새로고침"
                 >
