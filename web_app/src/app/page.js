@@ -31,7 +31,7 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, isLoggedIn, isPro, user } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
   // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
   const includeMap = {};
@@ -355,6 +355,29 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+
+        {/* Cloud Backup Notification Banner */}
+        {!isLoggedIn && (
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl p-4 sm:p-5 text-white shadow-lg shadow-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm border border-white/20">
+                <AlertTriangle size={24} className="text-blue-100" />
+              </div>
+              <div>
+                <h4 className="font-black text-lg">데이터가 이 기기에만 저장되어 있습니다</h4>
+                <p className="text-blue-100 text-sm font-medium">지금 클라우드에 백업하여 브라우저 초기화나 기기 분실로부터 자산을 안전하게 보호하세요.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                window.location.href = '/settings';
+              }}
+              className="px-6 py-2.5 bg-white text-blue-600 font-black rounded-xl hover:bg-blue-50 transition-all shadow-md whitespace-nowrap"
+            >
+              10초 만에 백업하기
+            </button>
+          </div>
+        )}
 
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">

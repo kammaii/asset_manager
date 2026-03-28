@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { headers } from 'next/headers';
+import { getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function POST(request) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { assets: providedAssets, history: providedHistory } = await request.json().catch(() => ({}));
 
         let assets = providedAssets;
@@ -16,14 +22,16 @@ export async function POST(request) {
         // 데이터가 없는 경우에만 내부 API 호출
         if (!assets || !history) {
             const reqHeaders = await headers();
+            const authHeader = reqHeaders.get('Authorization'); // 전달받은 토큰 재사용
             const host = reqHeaders.get('host') || 'localhost:3000';
             const protocol = host.includes('localhost') ? 'http' : 'https';
             const baseUrl = `${protocol}://${host}`;
 
             const [assetsRes, historyRes] = await Promise.all([
-                !assets ? fetch(`${baseUrl}/api/assets`) : Promise.resolve(null),
-                !history ? fetch(`${baseUrl}/api/history?type=daily`) : Promise.resolve(null)
+                !assets ? fetch(`${baseUrl}/api/assets`, { headers: { 'Authorization': authHeader } }) : Promise.resolve(null),
+                !history ? fetch(`${baseUrl}/api/history?type=daily`, { headers: { 'Authorization': authHeader } }) : Promise.resolve(null)
             ]);
+...
 
             if (assetsRes && assetsRes.ok) assets = await assetsRes.json();
             if (historyRes && historyRes.ok) history = await historyRes.json();

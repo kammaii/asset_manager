@@ -12,7 +12,7 @@ const QUICK_PROMPTS = [
 ];
 
 export default function AiAdvisor() {
-    const { assets, currentExchangeRate, targetAssetRatios } = useAssetStore();
+    const { assets, currentExchangeRate, targetAssetRatios, isLoggedIn, login } = useAssetStore();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -72,6 +72,16 @@ export default function AiAdvisor() {
 
     const sendMessage = async (content) => {
         if (!content.trim() || isLoading) return;
+
+        // 비로그인 유저 접근 제한
+        if (!isLoggedIn) {
+            setMessages(prev => [...prev, 
+                { role: 'user', content: content.trim() },
+                { role: 'assistant', content: "🔒 **AI 어드바이저는 Pro 전용 프리미엄 서비스입니다.**\n\n현재 로컬에서만 데이터를 관리하고 계시네요. **[클라우드 백업이 포함된 Pro 멤버십](/settings)**을 시작하시면 모든 자산 데이터를 기반으로 한 전문적인 분석과 맞춤 투자 전략을 무제한으로 제공받으실 수 있습니다!\n\n지금 [설정 페이지](/settings)에서 10초 만에 업그레이드해 보세요." }
+            ]);
+            setInput('');
+            return;
+        }
 
         const userMessage = { role: 'user', content: content.trim() };
         const newMessages = [...messages, userMessage];

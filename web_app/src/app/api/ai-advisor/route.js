@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { headers } from 'next/headers';
+import { getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // 최대 60초 실행 허용
@@ -126,6 +127,11 @@ ${portfolioContext}
 
 export async function POST(request) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         if (!process.env.GEMINI_API_KEY) {
             return NextResponse.json(
                 { error: 'GEMINI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.' },
@@ -141,16 +147,17 @@ export async function POST(request) {
         let assets = providedAssets;
         let exchangeRate = providedExchangeRate || 1400;
 
-        // 클라이언트에서 데이터를 전달하지 않은 경우에만 내부 API 호출 (하위 호환성 및 보수적 처리)
+        // 클라이언트에서 데이터를 전달하지 않은 경우에만 내부 API 호출
         if (!assets) {
             console.log('Fetching assets internally as they were not provided in request body');
             const reqHeaders = await headers();
+            const authHeader = reqHeaders.get('Authorization');
             const host = reqHeaders.get('host') || 'localhost:3000';
             const protocol = host.includes('localhost') ? 'http' : 'https';
             const baseUrl = `${protocol}://${host}`;
 
             const [assetsRes, exchangeRes] = await Promise.all([
-                fetch(`${baseUrl}/api/assets`),
+                fetch(`${baseUrl}/api/assets`, { headers: { 'Authorization': authHeader } }),
                 fetch(`${baseUrl}/api/exchange-rate`)
             ]);
 

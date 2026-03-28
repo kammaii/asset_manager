@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore/lite';
+import { getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
+    const uid = await getUserIdFromRequest(request);
+    if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(request.url);
     const limitParam = url.searchParams.get('limit');
 
-    const assetsRef = collection(db, 'assets');
-    const trxRef = collection(db, 'transactions');
+    const assetsRef = collection(db, 'users', uid, 'assets');
+    const trxRef = collection(db, 'users', uid, 'transactions');
 
     let trxQuery = trxRef;
     if (limitParam && limitParam !== 'all') {

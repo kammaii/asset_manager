@@ -28,7 +28,7 @@ const COLOR_CLASSES = {
 };
 
 export default function SettingsPage() {
-    const { enabledAssetTypes, targetAssetRatios, targetTotalAmount, fetchSettings, updateSettings, loading } = useAssetStore();
+    const { enabledAssetTypes, targetAssetRatios, targetTotalAmount, fetchSettings, updateSettings, loading, assets, isLoggedIn, user, login, logout, isPro, maxFreeAssets } = useAssetStore();
     const router = useRouter();
     const [localEnabled, setLocalEnabled] = useState([]);
     const [localRatios, setLocalRatios] = useState({});
@@ -95,13 +95,16 @@ export default function SettingsPage() {
         });
         setSaving(false);
         setSaved(true);
-        router.push('/');
+        // router.push('/'); // Keep on settings to see results
     };
 
     const hasChanges =
         JSON.stringify(localEnabled.sort()) !== JSON.stringify([...(enabledAssetTypes || [])].sort()) ||
         JSON.stringify(localRatios) !== JSON.stringify(targetAssetRatios || {}) ||
         localTargetAmount !== targetTotalAmount;
+
+    // 로컬 데이터 개수 계산
+    const localAssetCount = assets.filter(a => a.id.startsWith('local_')).length;
 
     if (!mounted) {
         return (
@@ -146,9 +149,90 @@ export default function SettingsPage() {
                             <Settings size={28} className="text-slate-400" />
                             설정
                         </h1>
-                        <p className="text-slate-500 text-sm mt-1">대시보드 표시 설정 및 리밸런싱 목표 비중을 편집합니다.</p>
+                        <p className="text-slate-500 text-sm mt-1">데이터 동기화 및 대시보드 표시 설정을 편집합니다.</p>
                     </div>
                 </div>
+
+                {/* Pro & Cloud Backup Integration Section (REVISED) */}
+                <section className="flex flex-col gap-4">
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+                        {isLoggedIn && isPro ? (
+                            // 1. Pro 유저 + 로그인 상태: 안전한 백업 상태 표시
+                            <div className="p-8 flex flex-col md:flex-row gap-8 items-center bg-gradient-to-br from-blue-50 to-white">
+                                <div className="flex-1 text-center md:text-left">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-wider mb-3">
+                                        Pro Member
+                                    </div>
+                                    <h3 className="text-xl font-black text-slate-900 mb-2">클라우드 백업 활성화 중</h3>
+                                    <p className="text-slate-500 text-sm leading-relaxed">
+                                        {user?.displayName}님, 모든 데이터가 실시간으로 안전하게 동기화되고 있습니다. 기기를 바꿔도 안심하세요!
+                                    </p>
+                                </div>
+                                <div className="shrink-0">
+                                    <div className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-blue-100 shadow-sm">
+                                        {user?.photoURL && (
+                                            <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" alt="profile" />
+                                        )}
+                                        <div className="flex flex-col pr-4">
+                                            <span className="text-xs font-bold text-slate-900">{user?.displayName}</span>
+                                            <span className="text-[10px] text-blue-500 font-bold">PRO ACCOUNT</span>
+                                        </div>
+                                        <button 
+                                            onClick={logout}
+                                            className="text-xs font-bold text-slate-300 hover:text-red-500 transition-colors pl-2 border-l border-slate-100"
+                                        >
+                                            로그아웃
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            // 2. 무료 유저 (비로그인 포함): Pro 업그레이드 유도
+                            <div className="flex flex-col">
+                                <div className="p-8 text-center md:text-left">
+                                    <h3 className="text-2xl font-black text-slate-900 mb-3">데이터 보험 & 클라우드 백업</h3>
+                                    <p className="text-slate-500 text-sm leading-relaxed mb-4">
+                                        현재 데이터가 브라우저에만 저장되어 있어 삭제 위험이 있습니다.<br/>
+                                        **Pro 플랜**으로 업그레이드하고 로그인을 통해 데이터를 영구히 안전하게 보호하세요.
+                                    </p>
+                                    
+                                    {localAssetCount > 0 && (
+                                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-600 rounded-full text-xs font-bold border border-amber-100">
+                                            <AlertTriangle size={14} /> 현재 {localAssetCount}개의 소중한 자산이 위험에 노출되어 있습니다.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="bg-slate-900 p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6">
+                                    <div className="flex-1">
+                                        <ul className="space-y-2">
+                                            <li className="flex items-center gap-2 text-sm text-slate-300">
+                                                <Check size={16} className="text-blue-400" /> 실시간 클라우드 자동 백업 (로그인)
+                                            </li>
+                                            <li className="flex items-center gap-2 text-sm text-slate-300">
+                                                <Check size={16} className="text-blue-400" /> 자산 무제한 등록 및 다중 기기 동기화
+                                            </li>
+                                            <li className="flex items-center gap-2 text-sm text-slate-300">
+                                                <Check size={16} className="text-blue-400" /> 프리미엄 AI 어드바이저 무제한 사용
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <button 
+                                        onClick={() => {
+                                            // 1단계: Pro 업그레이드 시뮬레이션 (Phase 2 데모용)
+                                            if (confirm("Pro 플랜으로 업그레이드하고 데이터를 백업하시겠습니까? (현재 데모 모드로 바로 로그인이 진행됩니다)")) {
+                                                login(); // 로그인 시 자동 Pro 처리 로직 스토어에 추가 필요
+                                            }
+                                        }}
+                                        className="px-8 py-4 bg-[#0d7ff2] hover:bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-900/20 transition-all transform active:scale-95 flex items-center gap-2"
+                                    >
+                                        <TrendingUp size={20} /> Pro 시작하고 데이터 백업하기
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
 
                 {/* 자산 탭 편집 영역 */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

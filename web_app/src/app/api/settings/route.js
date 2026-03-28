@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore/lite';
+import { getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
     try {
-        const docRef = doc(db, 'settings', 'general');
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const docRef = doc(db, 'users', uid, 'settings', 'general');
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
             return NextResponse.json(docSnap.data());
         } else {
-            // Return default values if document doesn't exist
+            // 문서가 없으면 기본값 반환
             return NextResponse.json({
                 accountTypes: ['키움증권', 'NH투자증권', '미래에셋', 'IRP', 'ISA', '일반'],
                 cashInstitutions: ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행']
@@ -26,6 +32,11 @@ export async function GET() {
 
 export async function POST(request) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await request.json();
         const {
             accountTypes,
@@ -39,9 +50,10 @@ export async function POST(request) {
             targetTotalAmount
         } = body;
 
-        const docRef = doc(db, 'settings', 'general');
+        // UID 기반 경로로 저장 (users/{uid}/settings/general)
+        const docRef = doc(db, 'users', uid, 'settings', 'general');
 
-        // Use setDoc with merge to only update provided fields if needed
+        // 전달된 필드만 업데이트 (merge)
         const updateData = {};
         if (accountTypes !== undefined) updateData.accountTypes = accountTypes;
         if (cashInstitutions !== undefined) updateData.cashInstitutions = cashInstitutions;

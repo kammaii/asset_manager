@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, query, orderBy, limit } from 'firebase/firestore/lite';
+import { getUserIdFromRequest } from '@/lib/firebase-admin';
 import { default as YahooFinance } from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic'; // Prevent Next.js from caching API routes
 
 export async function GET(request) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const url = new URL(request.url);
         const type = url.searchParams.get('type') || 'monthly';
 
@@ -15,7 +21,7 @@ export async function GET(request) {
 
         // Fetch snapshots and backfill if necessary
         if (type === 'daily') {
-            const snapshotsRef = collection(db, 'daily_snapshots');
+            const snapshotsRef = collection(db, 'users', uid, 'daily_snapshots');
             const q = query(snapshotsRef, orderBy('date', 'desc'), limit(40));
             const snapshotsSnap = await getDocs(q);
             let data = snapshotsSnap.docs.map(docSnap => docSnap.data());
@@ -59,7 +65,7 @@ export async function GET(request) {
 
             return NextResponse.json(backfilled.length > 0 ? backfilled : data);
         } else {
-            const snapshotsRef = collection(db, 'monthly_snapshots');
+            const snapshotsRef = collection(db, 'users', uid, 'monthly_snapshots');
             const q = query(snapshotsRef, orderBy('month', 'desc'), limit(24)); // Last 2 years
             const snapshotsSnap = await getDocs(q);
             let historyData = snapshotsSnap.docs.map(docSnap => docSnap.data());
