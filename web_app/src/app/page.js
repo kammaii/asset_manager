@@ -31,7 +31,7 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, isLoggedIn, isPro, user } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, isLoggedIn, isPro, user, error, getAuthHeaders } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
   // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
   const includeMap = {};
@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const [actionMenu, setActionMenu] = useState({ visible: false, x: 0, y: 0, asset: null, assetType: null });
 
+  // 최초 마운트 시 데이터 로드 (auth.authStateReady() 내부에서 대기 후 토큰 첨부)
   useEffect(() => {
     setMounted(true);
     fetchSettings();
@@ -82,6 +83,33 @@ export default function Dashboard() {
     };
     fetchRate();
   }, [fetchAssets, fetchTransactions, fetchHistory, fetchSettings]);
+
+  // 로그인 상태가 true로 바뀌면 (세션 복원 포함) 클라우드 데이터 재조회
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetchSettings();
+    fetchAssets();
+    fetchTransactions();
+    fetchHistory();
+  }, [isLoggedIn]);
+
+  // 앱 오픈 시 오늘 스냅샷을 라이브 가격으로 자동 저장 (하루 1회, sessionStorage로 중복 방지)
+  useEffect(() => {
+    if (!isLoggedIn || loading || assets.length === 0) return;
+    const snapshotKey = `snapshot_saved_${todayDateStr}`;
+    if (sessionStorage.getItem(snapshotKey)) return;
+
+    getAuthHeaders().then(headers =>
+      fetch('/api/history/snapshot', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(currentSummaryData),
+      })
+    ).then(res => {
+      if (res.ok) sessionStorage.setItem(snapshotKey, '1');
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, loading, assets.length]);
 
   useEffect(() => {
     const handleClickOutside = () => {

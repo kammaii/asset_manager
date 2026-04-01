@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore/lite';
-import { getUserIdFromRequest } from '@/lib/firebase-admin';
+import { adminDb, getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,34 +13,31 @@ export async function GET(request) {
     const url = new URL(request.url);
     const limitParam = url.searchParams.get('limit');
 
-    const assetsRef = collection(db, 'users', uid, 'assets');
-    const trxRef = collection(db, 'users', uid, 'transactions');
+    const assetsCol = adminDb.collection('users').doc(uid).collection('assets');
+    const trxCol = adminDb.collection('users').doc(uid).collection('transactions');
 
-    let trxQuery = trxRef;
+    let trxQuery = trxCol.orderBy('date', 'desc');
     if (limitParam && limitParam !== 'all') {
-      trxQuery = query(trxRef, orderBy('date', 'desc'), limit(parseInt(limitParam, 10)));
-    } else {
-      trxQuery = query(trxRef, orderBy('date', 'desc'));
+      trxQuery = trxQuery.limit(parseInt(limitParam, 10));
     }
 
-    const trxSnap = await getDocs(trxQuery);
+    const trxSnap = await trxQuery.get();
 
     const neededAssetIds = new Set();
-    trxSnap.docs.forEach(doc => {
-      if (!doc.data().type) neededAssetIds.add(doc.data().asset_id);
+    trxSnap.docs.forEach((d) => {
+      if (!d.data().type) neededAssetIds.add(d.data().asset_id);
     });
 
     const assetsMap = {};
-    // Backward compatibility: Only load all assets if there are old transactions missing 'type'
     if (neededAssetIds.size > 0) {
-      const assetsSnap = await getDocs(assetsRef);
-      assetsSnap.forEach(doc => {
-        assetsMap[doc.id] = doc.data();
+      const assetsSnap = await assetsCol.get();
+      assetsSnap.forEach((d) => {
+        assetsMap[d.id] = d.data();
       });
     }
 
-    const transactions = trxSnap.docs.map(doc => {
-      const data = doc.data();
+    const transactions = trxSnap.docs.map((docSnap) => {
+      const data = docSnap.data();
       const asset = assetsMap[data.asset_id] || {};
 
       let createdAt = data.createdAt;
@@ -51,7 +46,7 @@ export async function GET(request) {
       }
 
       return {
-        id: doc.id,
+        id: docSnap.id,
         action: data.action,
         date: data.date,
         quantity: data.quantity,
@@ -67,7 +62,6 @@ export async function GET(request) {
       };
     });
 
-    // Sort descending by date and createdAt
     transactions.sort((a, b) => {
       if (a.date !== b.date) {
         return new Date(b.date) - new Date(a.date);

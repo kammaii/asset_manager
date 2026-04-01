@@ -31,7 +31,6 @@ export async function POST(request) {
                 !assets ? fetch(`${baseUrl}/api/assets`, { headers: { 'Authorization': authHeader } }) : Promise.resolve(null),
                 !history ? fetch(`${baseUrl}/api/history?type=daily`, { headers: { 'Authorization': authHeader } }) : Promise.resolve(null)
             ]);
-...
 
             if (assetsRes && assetsRes.ok) assets = await assetsRes.json();
             if (historyRes && historyRes.ok) history = await historyRes.json();

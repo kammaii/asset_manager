@@ -29,11 +29,17 @@ const useAssetStore = create(
             error: null,
 
             // 인증 헤더 가져오기 헬퍼
+            // onAuthStateChanged Promise 래핑으로 세션 복원이 완료될 때까지 안전하게 대기
             getAuthHeaders: async () => {
-                const state = get();
                 const headers = { 'Content-Type': 'application/json' };
-                if (state.isLoggedIn && auth.currentUser) {
-                    const token = await auth.currentUser.getIdToken();
+                const user = await new Promise((resolve) => {
+                    const unsubscribe = onAuthStateChanged(auth, (u) => {
+                        unsubscribe();
+                        resolve(u);
+                    });
+                });
+                if (user) {
+                    const token = await user.getIdToken();
                     headers['Authorization'] = `Bearer ${token}`;
                 }
                 return headers;

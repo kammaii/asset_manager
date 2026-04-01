@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore/lite';
-import { getUserIdFromRequest } from '@/lib/firebase-admin';
+import { adminDb, getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,18 +10,16 @@ export async function GET(request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const docRef = doc(db, 'users', uid, 'settings', 'general');
-        const docSnap = await getDoc(docRef);
+        const docRef = adminDb.collection('users').doc(uid).collection('settings').doc('general');
+        const docSnap = await docRef.get();
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             return NextResponse.json(docSnap.data());
-        } else {
-            // 문서가 없으면 기본값 반환
-            return NextResponse.json({
-                accountTypes: ['키움증권', 'NH투자증권', '미래에셋', 'IRP', 'ISA', '일반'],
-                cashInstitutions: ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행']
-            });
         }
+        return NextResponse.json({
+            accountTypes: ['키움증권', 'NH투자증권', '미래에셋', 'IRP', 'ISA', '일반'],
+            cashInstitutions: ['NH투자증권', '토스뱅크', '카카오뱅크', 'KB국민은행', '신한은행']
+        });
     } catch (error) {
         console.error('Error fetching settings:', error);
         return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
@@ -50,10 +46,8 @@ export async function POST(request) {
             targetTotalAmount
         } = body;
 
-        // UID 기반 경로로 저장 (users/{uid}/settings/general)
-        const docRef = doc(db, 'users', uid, 'settings', 'general');
+        const docRef = adminDb.collection('users').doc(uid).collection('settings').doc('general');
 
-        // 전달된 필드만 업데이트 (merge)
         const updateData = {};
         if (accountTypes !== undefined) updateData.accountTypes = accountTypes;
         if (cashInstitutions !== undefined) updateData.cashInstitutions = cashInstitutions;
@@ -65,7 +59,7 @@ export async function POST(request) {
         if (targetAssetRatios !== undefined) updateData.targetAssetRatios = targetAssetRatios;
         if (targetTotalAmount !== undefined) updateData.targetTotalAmount = targetTotalAmount;
 
-        await setDoc(docRef, updateData, { merge: true });
+        await docRef.set(updateData, { merge: true });
 
         return NextResponse.json({ success: true });
     } catch (error) {

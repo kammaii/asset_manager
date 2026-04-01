@@ -1,21 +1,24 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore/lite';
+import { adminDb, FieldValue, getUserIdFromRequest } from '@/lib/firebase-admin';
 
 export async function PUT(request, { params }) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { id } = await params;
         const body = await request.json();
-        const assetRef = doc(db, 'assets', id);
+        const assetRef = adminDb.collection('users').doc(uid).collection('assets').doc(id);
 
-        // Remove id and createdAt if they happen to be in the body to avoid overwriting them incorrectly
         const updateData = { ...body };
         delete updateData.id;
         delete updateData.createdAt;
 
-        await updateDoc(assetRef, {
+        await assetRef.update({
             ...updateData,
-            updatedAt: serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp()
         });
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -26,11 +29,14 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { id } = await params;
-        const assetRef = doc(db, 'assets', id);
-        await deleteDoc(assetRef);
-        // Maybe we also need to delete transactions associated with this asset?
-        // Let's assume for real estate it's fine for now, or we can handle it if needed.
+        const assetRef = adminDb.collection('users').doc(uid).collection('assets').doc(id);
+        await assetRef.delete();
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Failed to delete asset', error);

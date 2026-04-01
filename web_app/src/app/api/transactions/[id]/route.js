@@ -1,25 +1,24 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, getDocs, collection, query, where, deleteDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite';
+import { adminDb, FieldValue, getUserIdFromRequest } from '@/lib/firebase-admin';
 
-async function recalculateAsset(assetId) {
-    const assetRef = doc(db, 'assets', assetId);
-    const assetSnap = await getDoc(assetRef);
-    if (!assetSnap.exists()) return;
+async function recalculateAsset(uid, assetId) {
+    const assetRef = adminDb.collection('users').doc(uid).collection('assets').doc(assetId);
+    const assetSnap = await assetRef.get();
+    if (!assetSnap.exists) return;
 
-    // Get all transactions for this asset
-    const txsRef = collection(db, 'transactions');
-    const q = query(txsRef, where('asset_id', '==', assetId));
-    const txsSnap = await getDocs(q);
+    const txsSnap = await adminDb
+        .collection('users')
+        .doc(uid)
+        .collection('transactions')
+        .where('asset_id', '==', assetId)
+        .get();
 
     if (txsSnap.empty) {
-        // No transactions left, delete the asset
-        await deleteDoc(assetRef);
+        await assetRef.delete();
         return;
     }
 
-    const txs = txsSnap.docs.map(doc => doc.data());
-    // chronologoical order
+    const txs = txsSnap.docs.map((d) => d.data());
     txs.sort((a, b) => {
         if (a.date !== b.date) {
             return new Date(a.date) - new Date(b.date);
@@ -39,35 +38,39 @@ async function recalculateAsset(assetId) {
         } else if (tx.action === 'sell') {
             const sellQty = tx.quantity;
             currentQty -= sellQty;
-            if (currentQty < 0) currentQty = 0; // Prevent negative quantity in logical errors
+            if (currentQty < 0) currentQty = 0;
 
-            // On sell, principal is reduced proportionally, average price remains the same
             const proportion = (currentQty + sellQty) > 0 ? currentQty / (currentQty + sellQty) : 0;
             currentPrincipal = currentPrincipal * proportion;
         }
     }
 
-    await updateDoc(assetRef, {
+    await assetRef.update({
         quantity: currentQty,
         avgPrice: currentAvgPrice,
         principal: currentPrincipal,
-        updatedAt: serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     });
 }
 
 export async function DELETE(request, { params }) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { id } = await params;
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 
-        const txRef = doc(db, 'transactions', id);
-        const txSnap = await getDoc(txRef);
-        if (!txSnap.exists()) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+        const txRef = adminDb.collection('users').doc(uid).collection('transactions').doc(id);
+        const txSnap = await txRef.get();
+        if (!txSnap.exists) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
         const assetId = txSnap.data().asset_id;
 
-        await deleteDoc(txRef);
-        await recalculateAsset(assetId);
+        await txRef.delete();
+        await recalculateAsset(uid, assetId);
 
         return NextResponse.json({ success: true }, { status: 200 });
     } catch (error) {
@@ -78,15 +81,21 @@ export async function DELETE(request, { params }) {
 
 export async function PUT(request, { params }) {
     try {
+        const uid = await getUserIdFromRequest(request);
+        if (!uid) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { id } = await params;
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 
         const body = await request.json();
         const { date, quantity, price, action, type, region, symbol, name, account, expense, deposit, realEstateCurrentPrice, investmentCountry } = body;
 
-        const txRef = doc(db, 'transactions', id);
-        const txSnap = await getDoc(txRef);
-        if (!txSnap.exists()) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+        const assetsCol = adminDb.collection('users').doc(uid).collection('assets');
+        const txRef = adminDb.collection('users').doc(uid).collection('transactions').doc(id);
+        const txSnap = await txRef.get();
+        if (!txSnap.exists) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
         const tx = txSnap.data();
         const oldAssetId = tx.asset_id;
@@ -97,28 +106,24 @@ export async function PUT(request, { params }) {
         const queryInvestmentCountry = investmentCountry || region || 'KR';
 
         if (type && name) {
-            const oldAssetRef = doc(db, 'assets', oldAssetId);
-            const oldAssetSnap = await getDoc(oldAssetRef);
+            const oldAssetSnap = await assetsCol.doc(oldAssetId).get();
             const oldAsset = oldAssetSnap.data();
 
             if (oldAsset && (oldAsset.type !== type || oldAsset.region !== queryRegion || oldAsset.symbol !== querySymbol || oldAsset.name !== name || oldAsset.account !== (account || '일반') || oldAsset.investmentCountry !== queryInvestmentCountry)) {
 
-                const assetsRef = collection(db, 'assets');
-                const queryConstraints = [
-                    where('type', '==', type),
-                    where('region', '==', queryRegion),
-                    where('symbol', '==', querySymbol),
-                    where('name', '==', name),
-                    where('account', '==', account || '일반')
-                ];
-                if (investmentCountry) queryConstraints.push(where('investmentCountry', '==', queryInvestmentCountry));
+                let targetQ = assetsCol
+                    .where('type', '==', type)
+                    .where('region', '==', queryRegion)
+                    .where('symbol', '==', querySymbol)
+                    .where('name', '==', name)
+                    .where('account', '==', account || '일반');
+                if (investmentCountry) targetQ = targetQ.where('investmentCountry', '==', queryInvestmentCountry);
 
-                const targetQ = query(assetsRef, ...queryConstraints);
-                const targetSnap = await getDocs(targetQ);
+                const targetSnap = await targetQ.get();
 
                 if (targetSnap.empty) {
-                    const newAssetRef = doc(collection(db, 'assets'));
-                    await setDoc(newAssetRef, {
+                    const newDocRef = assetsCol.doc();
+                    await newDocRef.set({
                         type,
                         region: queryRegion,
                         investmentCountry: queryInvestmentCountry,
@@ -128,10 +133,10 @@ export async function PUT(request, { params }) {
                         quantity: 0,
                         avgPrice: 0,
                         principal: 0,
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp()
+                        createdAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
                     });
-                    newAssetId = newAssetRef.id;
+                    newAssetId = newDocRef.id;
                 } else {
                     newAssetId = targetSnap.docs[0].id;
                 }
@@ -140,7 +145,7 @@ export async function PUT(request, { params }) {
 
         const resolvedPrice = (type === 'cash' && queryRegion === 'US' && !price) ? 1 : (price || tx.price);
 
-        await updateDoc(txRef, {
+        await txRef.update({
             date: date || tx.date,
             quantity: quantity || tx.quantity,
             price: resolvedPrice,
@@ -155,14 +160,14 @@ export async function PUT(request, { params }) {
         });
 
         if (oldAssetId !== newAssetId) {
-            await recalculateAsset(oldAssetId);
-            await recalculateAsset(newAssetId);
+            await recalculateAsset(uid, oldAssetId);
+            await recalculateAsset(uid, newAssetId);
         } else {
-            await recalculateAsset(oldAssetId);
+            await recalculateAsset(uid, oldAssetId);
         }
 
         if (type === 'real_estate') {
-            await updateDoc(doc(db, 'assets', newAssetId), {
+            await assetsCol.doc(newAssetId).update({
                 expense: parseFloat(expense) || 0,
                 deposit: parseFloat(deposit) || 0,
                 realEstateCurrentPrice: parseFloat(realEstateCurrentPrice) || 0,

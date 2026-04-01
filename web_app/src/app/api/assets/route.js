@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase'; // Keep for client SDK usage if needed, but consider migrating to adminDb for full control
-import { collection, getDocs, getDoc, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore/lite';
-import { getUserIdFromRequest } from '@/lib/firebase-admin';
+import { adminDb, FieldValue, getUserIdFromRequest } from '@/lib/firebase-admin';
 import { default as YahooFinance } from 'yahoo-finance2';
 
 export const dynamic = 'force-dynamic';
 
-// ... (getCachedQuote and priceCache logic remains the same)
+const priceCache = {};
+async function getCachedQuote(symbol) {
+    if (priceCache[symbol]) return priceCache[symbol];
+    const yf = new YahooFinance();
+    const data = await yf.quote(symbol);
+    priceCache[symbol] = data;
+    return data;
+}
 
 export async function GET(request) {
     try {
@@ -15,9 +20,8 @@ export async function GET(request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const assetsRef = collection(db, 'users', uid, 'assets');
-        const snapshot = await getDocs(assetsRef);
-        const assets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const assetsSnap = await adminDb.collection('users').doc(uid).collection('assets').get();
+        const assets = assetsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
         // Enrichment logic remains exactly the same...
         const enrichedAssets = await Promise.all(assets.map(async (asset) => {
@@ -187,24 +191,22 @@ export async function POST(request) {
         const qty = parseFloat(quantity);
         const prc = parseFloat(price);
 
-        const assetsRef = collection(db, 'users', uid, 'assets');
-        const trxRef = collection(db, 'users', uid, 'transactions');
-        
-        const queryConstraints = [
-            where('type', '==', type),
-            where('region', '==', region || 'KR'),
-            where('name', '==', name),
-        ];
-        // 현금과 부동산은 account, symbol 등을 제외하고 이름 단위로 기존 자산을 매칭함
+        const assetsCol = adminDb.collection('users').doc(uid).collection('assets');
+        const trxCol = adminDb.collection('users').doc(uid).collection('transactions');
+
+        let assetQuery = assetsCol
+            .where('type', '==', type)
+            .where('region', '==', region || 'KR')
+            .where('name', '==', name);
         if (type === 'stock' || type === 'pension') {
-            queryConstraints.push(where('account', '==', account || '일반'));
-            queryConstraints.push(where('symbol', '==', symbol || ''));
+            assetQuery = assetQuery
+                .where('account', '==', account || '일반')
+                .where('symbol', '==', symbol || '');
             if (investmentCountry) {
-                queryConstraints.push(where('investmentCountry', '==', investmentCountry));
+                assetQuery = assetQuery.where('investmentCountry', '==', investmentCountry);
             }
         }
-        const q = query(assetsRef, ...queryConstraints);
-        const snapshot = await getDocs(q);
+        const snapshot = await assetQuery.get();
 
         let asset = null;
         if (!snapshot.empty) {
@@ -230,12 +232,11 @@ export async function POST(request) {
                 newAvgPrice = asset.avgPrice; // Avg price doesn't change on sell
             }
 
-            const assetDoc = doc(db, 'users', uid, 'assets', asset.id);
             const updateData = {
                 quantity: newQty,
                 avgPrice: newAvgPrice,
                 principal: newPrincipal,
-                updatedAt: serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
             };
             if (investmentCountry !== undefined) updateData.investmentCountry = investmentCountry;
             if (type === 'real_estate') {
@@ -245,7 +246,7 @@ export async function POST(request) {
             } else if (type === 'gold') {
                 if (goldCurrentPrice !== undefined) updateData.goldCurrentPrice = parseFloat(goldCurrentPrice) || 0;
             }
-            await updateDoc(assetDoc, updateData);
+            await assetsCol.doc(asset.id).update(updateData);
         } else {
             if (action === 'sell') {
                 return NextResponse.json({ error: 'Cannot sell asset not owned' }, { status: 400 });
@@ -260,8 +261,8 @@ export async function POST(request) {
                 quantity: newQty,
                 avgPrice: newAvgPrice,
                 principal: newPrincipal,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
             };
             if (type === 'real_estate') {
                 newAssetData.expense = expense ? parseFloat(expense) : 0;
@@ -270,12 +271,13 @@ export async function POST(request) {
             } else if (type === 'gold') {
                 newAssetData.goldCurrentPrice = goldCurrentPrice ? parseFloat(goldCurrentPrice) : newAvgPrice;
             }
-            const newDocRef = await addDoc(assetsRef, newAssetData);
+            const newDocRef = assetsCol.doc();
+            await newDocRef.set(newAssetData);
             assetId = newDocRef.id;
         }
 
         // Insert transaction record with denormalized asset info
-        await addDoc(trxRef, {
+        await trxCol.add({
             asset_id: assetId,
             action,
             date,
@@ -287,17 +289,17 @@ export async function POST(request) {
             name,
             symbol: symbol || '',
             account: account || '일반',
-            createdAt: serverTimestamp()
+            createdAt: FieldValue.serverTimestamp()
         });
 
         // 3. Handle Linked Cash Asset if provided
         if (linkedCashAssetId) {
             try {
                 // Find cash asset
-                const cashDocRef = doc(db, 'users', uid, 'assets', linkedCashAssetId);
-                const cashSnapshot = await getDoc(cashDocRef);
+                const cashDocRef = assetsCol.doc(linkedCashAssetId);
+                const cashSnapshot = await cashDocRef.get();
 
-                if (cashSnapshot.exists() && cashSnapshot.data().type === 'cash') {
+                if (cashSnapshot.exists && cashSnapshot.data().type === 'cash') {
                     const cashAsset = { id: cashSnapshot.id, ...cashSnapshot.data() };
 
                     // Calculate total cost
@@ -320,14 +322,14 @@ export async function POST(request) {
                     }
 
                     // Update cash asset
-                    await updateDoc(cashDocRef, {
+                    await cashDocRef.update({
                         quantity: newCashQty,
                         principal: newCashQty * (cashAsset.avgPrice || 1), // Optional depending on how cash avgPrice is handled
-                        updatedAt: serverTimestamp()
+                        updatedAt: FieldValue.serverTimestamp()
                     });
 
                     // Add transaction for cash asset
-                    await addDoc(trxRef, {
+                    await trxCol.add({
                         asset_id: cashAsset.id,
                         action: cashAction,
                         date,
@@ -340,7 +342,7 @@ export async function POST(request) {
                         symbol: cashAsset.symbol || cashAsset.name,
                         account: cashAsset.account || '일반',
                         memo: '자동 연동', // Flag or description for automatic sync
-                        createdAt: serverTimestamp()
+                        createdAt: FieldValue.serverTimestamp()
                     });
                 }
             } catch (cashError) {

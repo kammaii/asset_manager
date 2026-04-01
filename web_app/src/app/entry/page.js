@@ -94,6 +94,14 @@ export default function EntryPage() {
         }
     }, [fetchAssets, fetchTransactions, fetchSettings]);
 
+    // 로그인 상태가 true로 바뀌면 (세션 복원 포함) 클라우드 데이터 재조회
+    useEffect(() => {
+        if (!isLoggedIn) return;
+        fetchSettings();
+        fetchAssets();
+        fetchTransactions();
+    }, [isLoggedIn]);
+
     // 활성화된 탭이 enabled 리스트에 없으면 첫 번째 활성 탭으로 폴백
     useEffect(() => {
         if (enabledAssetTypes && enabledAssetTypes.length > 0) {
