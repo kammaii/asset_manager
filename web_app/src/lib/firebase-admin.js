@@ -1,12 +1,16 @@
-import admin from 'firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 /**
- * FIREBASE_PRIVATE_KEY가 비어 있으면 cert()에 undefined가 들어가 "private_key" 오류가 난다.
- * 키가 있을 때만 서비스 계정으로 초기화하고, 없으면 ADC(application default)를 쓴다.
+ * 로컬: .env의 서비스 계정 또는 ADC(gcloud / GOOGLE_APPLICATION_CREDENTIALS).
+ * Firebase Hosting(App Hosting·frameworks 백엔드): FIREBASE_CONFIG 주입 시 무인자 initializeApp() 권장.
+ * Next.js가 firebase-admin을 번들하면 런타임 오류가 날 수 있어 next.config.mjs의 serverExternalPackages에 포함함.
  */
-function initFirebaseAdmin() {
-    if (admin.apps.length) return;
+function getOrInitApp() {
+    if (getApps().length > 0) {
+        return getApps()[0];
+    }
 
     const projectId =
         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'asset-master-jwpark';
@@ -15,11 +19,10 @@ function initFirebaseAdmin() {
     if (json?.trim()) {
         try {
             const sa = JSON.parse(json);
-            admin.initializeApp({
-                credential: admin.credential.cert(sa),
+            return initializeApp({
+                credential: cert(sa),
                 projectId: sa.project_id || projectId,
             });
-            return;
         } catch (e) {
             console.error('[firebase-admin] FIREBASE_SERVICE_ACCOUNT_JSON 파싱 실패:', e);
         }
@@ -31,28 +34,33 @@ function initFirebaseAdmin() {
         typeof rawKey === 'string' ? rawKey.replace(/\\n/g, '\n').trim() : '';
 
     if (clientEmail && privateKey.includes('BEGIN PRIVATE KEY')) {
-        admin.initializeApp({
-            credential: admin.credential.cert({
+        return initializeApp({
+            credential: cert({
                 projectId,
                 clientEmail,
                 privateKey,
             }),
         });
-        return;
     }
 
-    // 로컬: GOOGLE_APPLICATION_CREDENTIALS=/path/to.json 또는 gcloud auth application-default login
-    // 배포: 클라우드가 자동으로 ADC 주입
-    admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
+    // Cloud Run / App Hosting: 콘솔이 주입하는 FIREBASE_CONFIG로 자동 구성 (ADC보다 안정적)
+    if (process.env.FIREBASE_CONFIG?.trim()) {
+        try {
+            return initializeApp();
+        } catch (e) {
+            console.error('[firebase-admin] FIREBASE_CONFIG 기반 initializeApp() 실패:', e);
+        }
+    }
+
+    return initializeApp({
+        credential: applicationDefault(),
         projectId,
     });
 }
 
-initFirebaseAdmin();
-
-const adminDb = admin.firestore();
-const adminAuth = admin.auth();
+const app = getOrInitApp();
+const adminDb = getFirestore(app);
+const adminAuth = getAuth(app);
 
 /** 서버 API Route에서만 사용. 클라이언트 SDK로는 rules의 request.auth가 비어 사용자 데이터 읽기가 거부됨. */
 export { adminDb, adminAuth, FieldValue };
