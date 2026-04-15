@@ -54,7 +54,7 @@ export default function EntryPage() {
         setMounted(true);
         fetchSettings();
         fetchAssets();
-        fetchTransactions();
+        fetchTransactions(true); // 전체 로드: 연금·금 등 최신 20건 밖의 타입도 표시되어야 함
 
         // Fetch current exchange rate
         const fetchRate = async () => {
@@ -99,7 +99,7 @@ export default function EntryPage() {
         if (!isLoggedIn) return;
         fetchSettings();
         fetchAssets();
-        fetchTransactions();
+        fetchTransactions(true); // 전체 로드
     }, [isLoggedIn]);
 
     // 활성화된 탭이 enabled 리스트에 없으면 첫 번째 활성 탭으로 폴백

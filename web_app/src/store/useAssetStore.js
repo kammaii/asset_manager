@@ -241,6 +241,7 @@ const useAssetStore = create(
                         const errorData = await res.json();
                         throw new Error(errorData.error || 'Failed to process transaction');
                     }
+                    set({ loading: false });
                     await get().fetchAssets();
                     await get().fetchTransactions();
                 } catch (error) {
@@ -258,6 +259,7 @@ const useAssetStore = create(
                         headers
                     });
                     if (!res.ok) throw new Error('Failed to delete transaction');
+                    set({ loading: false });
                     await get().fetchAssets();
                     await get().fetchTransactions();
                 } catch (error) {
@@ -275,6 +277,7 @@ const useAssetStore = create(
                         headers
                     });
                     if (!res.ok) throw new Error('Failed to delete asset');
+                    set({ loading: false });
                     await get().fetchAssets();
                     await get().fetchTransactions();
                 } catch (error) {
@@ -293,6 +296,7 @@ const useAssetStore = create(
                         body: JSON.stringify(updatedData),
                     });
                     if (!res.ok) throw new Error('Failed to update transaction');
+                    set({ loading: false });
                     await get().fetchAssets();
                     await get().fetchTransactions();
                 } catch (error) {
@@ -311,6 +315,7 @@ const useAssetStore = create(
                         body: JSON.stringify(updatedData),
                     });
                     if (!res.ok) throw new Error('Failed to update asset');
+                    set({ loading: false });
                     await get().fetchAssets();
                     await get().fetchTransactions();
                 } catch (error) {
