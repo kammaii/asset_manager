@@ -1,11 +1,15 @@
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import {
+    __FIREBASE_ADMIN_EMBEDDED_JSON,
+    __FIREBASE_ADMIN_EMBEDDED_CLIENT_EMAIL,
+    __FIREBASE_ADMIN_EMBEDDED_PRIVATE_KEY,
+} from './firebaseAdminEmbedded.generated.js';
 
 /**
- * 로컬: .env의 서비스 계정 또는 ADC(gcloud / GOOGLE_APPLICATION_CREDENTIALS).
- * Firebase Hosting(App Hosting·frameworks 백엔드): FIREBASE_CONFIG 주입 시 무인자 initializeApp() 권장.
- * Next.js가 firebase-admin을 번들하면 런타임 오류가 날 수 있어 next.config.mjs의 serverExternalPackages에 포함함.
+ * 런타임 env(로컬 next dev) 우선, 없으면 prebuild가 만든 firebaseAdminEmbedded.generated.js 값 사용.
+ * Cloud Run에는 .env가 없어 process.env만으로는 비어 있음 → 생성 파일에 박힌 상수로 Admin 초기화.
  */
 function getOrInitApp() {
     if (getApps().length > 0) {
@@ -15,7 +19,8 @@ function getOrInitApp() {
     const projectId =
         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'asset-master-jwpark';
 
-    const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const json =
+        process.env.FIREBASE_SERVICE_ACCOUNT_JSON || __FIREBASE_ADMIN_EMBEDDED_JSON;
     if (json?.trim()) {
         try {
             const sa = JSON.parse(json);
@@ -28,8 +33,11 @@ function getOrInitApp() {
         }
     }
 
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
-    const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+    const clientEmail = (
+        process.env.FIREBASE_CLIENT_EMAIL || __FIREBASE_ADMIN_EMBEDDED_CLIENT_EMAIL
+    )?.trim();
+    const rawKey =
+        process.env.FIREBASE_PRIVATE_KEY || __FIREBASE_ADMIN_EMBEDDED_PRIVATE_KEY;
     const privateKey =
         typeof rawKey === 'string' ? rawKey.replace(/\\n/g, '\n').trim() : '';
 
@@ -43,7 +51,6 @@ function getOrInitApp() {
         });
     }
 
-    // Cloud Run / App Hosting: 콘솔이 주입하는 FIREBASE_CONFIG로 자동 구성 (ADC보다 안정적)
     if (process.env.FIREBASE_CONFIG?.trim()) {
         try {
             return initializeApp();
@@ -65,9 +72,6 @@ const adminAuth = getAuth(app);
 /** 서버 API Route에서만 사용. 클라이언트 SDK로는 rules의 request.auth가 비어 사용자 데이터 읽기가 거부됨. */
 export { adminDb, adminAuth, FieldValue };
 
-/**
- * Authorization 헤더에서 토큰을 추출하고 검증하여 UID를 반환합니다.
- */
 export async function getUserIdFromRequest(request) {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

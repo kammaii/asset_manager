@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/embed-firebase-admin.mjs",
+    "prebuild": "node scripts/embed-firebase-admin.mjs",
+    "predev": "node scripts/embed-firebase-admin.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -16,7 +19,7 @@
     "firebase-functions": "^7.0.6",
     "firebase-functions-test": "^3.4.1",
     "lucide-react": "^0.575.0",
-    "next": "16.1.6",
+    "next": "^15.5.14",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
@@ -25,8 +28,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "dotenv": "^17.4.0",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "^15.5.14",
     "tailwindcss": "^4"
   }
 }

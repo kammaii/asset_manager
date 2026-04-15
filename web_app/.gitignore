@@ -34,6 +34,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# embed 스크립트가 생성 — 서비스 계정이 들어갈 수 있어 커밋하지 않음(npm install 시 null로 생성)
+src/lib/firebaseAdminEmbedded.generated.js
+
+
 # vercel
 .vercel
 

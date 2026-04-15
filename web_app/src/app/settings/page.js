@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAssetStore from '@/store/useAssetStore';
-import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft, PieChart, Target, TrendingUp } from 'lucide-react';
+import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft, PieChart, Target, TrendingUp, AlertTriangle } from 'lucide-react';
 
 // 앱에서 지원하는 모든 자산 유형 정의
 const ALL_ASSET_TYPES = [

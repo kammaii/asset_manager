@@ -815,7 +815,7 @@ export default function Dashboard() {
                     {filteredAssets.length === 0 ? (
                       <tr>
                         <td colSpan={assetType === 'cash' ? "2" : assetType === 'car' ? "4" : "8"} className="p-8 text-center text-slate-500">
-                          내역이 없습니다. "자산 추가" 버튼을 통해 시작해보세요.
+                          내역이 없습니다. &quot;자산 추가&quot; 버튼을 통해 시작해보세요.
                         </td>
                       </tr>
                     ) : (
