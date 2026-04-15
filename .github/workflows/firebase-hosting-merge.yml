@@ -11,9 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Next.js 프로덕션 빌드에 Admin SDK용 서비스 계정 JSON이 필요함(로컬은 .env.local, CI에는 없으면 API 500)
       - name: Create env file
-        run: echo "NEXT_PUBLIC_ALLOWED_EMAILS=${{ secrets.NEXT_PUBLIC_ALLOWED_EMAILS }}" > .env.production
         working-directory: ./web_app
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASSET_MASTER_JWPARK }}
+        run: |
+          echo "NEXT_PUBLIC_ALLOWED_EMAILS=${{ secrets.NEXT_PUBLIC_ALLOWED_EMAILS }}" > .env.production
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            node -e "const fs=require('fs'); const j=process.env.FIREBASE_SERVICE_ACCOUNT_JSON; fs.appendFileSync('.env.production', 'FIREBASE_SERVICE_ACCOUNT_JSON=' + JSON.stringify(j) + String.fromCharCode(10));"
+          fi
       - run: npm ci && npm run build
         working-directory: ./web_app
       - uses: FirebaseExtended/action-hosting-deploy@v0
