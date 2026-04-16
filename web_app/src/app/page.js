@@ -757,15 +757,65 @@ export default function Dashboard() {
           if (!meta) return null;
           const title = meta.label;
 
-          // 최소한 주식 테이블은 내역이 없어도 보이도록 (또는 첫 번째 활성화된 자산)
-          // 가상화폐와 자동차도 내역이 없더라도 보이도록 설정 (유저 요청 반영)
           if (filteredAssets.length === 0 && !['stock', 'crypto', 'car', sortedEnabledTypes[0]].includes(assetType)) return null;
+
+          // 헤더 합계 계산 (보유 자산이 있을 때만)
+          const tableTotal = {};
+          if (filteredAssets.length > 0) {
+            if (assetType === 'cash') {
+              tableTotal.totalKRW = filteredAssets.reduce((sum, a) =>
+                sum + (a.region === 'US' ? a.quantity * currentExchangeRate : a.quantity), 0);
+            } else if (assetType === 'gold') {
+              tableTotal.totalValue = filteredAssets.reduce((sum, a) => sum + (a.totalValue || 0), 0);
+              const totalPrincipal = filteredAssets.reduce((sum, a) => sum + (a.principal || 0), 0);
+              tableTotal.totalProfit = filteredAssets.reduce((sum, a) => sum + (a.profitGain || 0), 0);
+              tableTotal.totalProfitRate = totalPrincipal > 0 ? (tableTotal.totalProfit / totalPrincipal) * 100 : 0;
+            } else if (assetType === 'real_estate') {
+              tableTotal.totalCurrentPrice = filteredAssets.reduce((sum, a) => sum + (a.currentPrice || 0), 0);
+              tableTotal.totalProfit = filteredAssets.reduce((sum, a) => sum + (a.profitGain || 0), 0);
+              const totalNetInvestment = filteredAssets.reduce((sum, a) => sum + (a.netInvestment || 0), 0);
+              tableTotal.totalProfitRate = totalNetInvestment > 0 ? (tableTotal.totalProfit / totalNetInvestment) * 100 : 0;
+            } else if (assetType === 'car') {
+              tableTotal.totalPurchase = filteredAssets.reduce((sum, a) => sum + (a.principal || 0), 0);
+            } else {
+              tableTotal.totalValueKRW = filteredAssets.reduce((sum, a) =>
+                sum + (a.totalValue || 0) * (a.region === 'US' ? currentExchangeRate : 1), 0);
+              tableTotal.totalProfitKRW = filteredAssets.reduce((sum, a) =>
+                sum + (a.profitGain || 0) * (a.region === 'US' ? currentExchangeRate : 1), 0);
+              const totalPrincipalKRW = filteredAssets.reduce((sum, a) =>
+                sum + (a.principal || 0) * (a.region === 'US' ? currentExchangeRate : 1), 0);
+              tableTotal.totalProfitRate = totalPrincipalKRW > 0 ? (tableTotal.totalProfitKRW / totalPrincipalKRW) * 100 : 0;
+            }
+          }
 
           return (
             <div key={assetType} className="rounded-xl bg-white border border-slate-200 overflow-hidden mt-6">
-              <div className="p-6 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-slate-900">{title} 보유 현황 리스트</h3>
-                <Link href={`/entry?tab=${assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline">자산 추가/관리하기</Link>
+              <div className="p-6 border-b border-slate-200 flex justify-between items-center gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <h3 className="text-lg font-bold text-slate-900 shrink-0">{title} 보유 현황 리스트</h3>
+                  {filteredAssets.length > 0 && (
+                    <div className="flex items-center gap-2 pl-3 border-l-2 border-slate-200">
+                      <span className="text-base font-black text-slate-800 tracking-tight">
+                        {assetType === 'cash' && formatCurrency(tableTotal.totalKRW)}
+                        {assetType === 'gold' && formatCurrency(tableTotal.totalValue, 'KR')}
+                        {assetType === 'real_estate' && formatCurrency(tableTotal.totalCurrentPrice)}
+                        {assetType === 'car' && formatCurrency(tableTotal.totalPurchase, 'KR')}
+                        {!['cash', 'gold', 'real_estate', 'car'].includes(assetType) && formatCurrency(tableTotal.totalValueKRW)}
+                      </span>
+                      {!['cash', 'car'].includes(assetType) && (() => {
+                        const profit = tableTotal.totalProfit ?? tableTotal.totalProfitKRW ?? 0;
+                        const rate = tableTotal.totalProfitRate ?? 0;
+                        const isPositive = profit >= 0;
+                        return (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isPositive ? 'text-[#ff4d4f] bg-red-50' : 'text-[#0d7ff2] bg-blue-50'}`}>
+                            {profit > 0 ? '+' : ''}{formatCurrency(profit)}&nbsp;({rate > 0 ? '+' : ''}{rate.toFixed(2)}%)
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+                <Link href={`/entry?tab=${assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline shrink-0">자산 추가/관리하기</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[700px]">
