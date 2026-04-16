@@ -277,7 +277,8 @@ export async function POST(request) {
         }
 
         // Insert transaction record with denormalized asset info
-        await trxCol.add({
+        const mainTxRef = trxCol.doc();
+        await mainTxRef.set({
             asset_id: assetId,
             action,
             date,
@@ -295,14 +296,12 @@ export async function POST(request) {
         // 3. Handle Linked Cash Asset if provided
         if (linkedCashAssetId) {
             try {
-                // Find cash asset
                 const cashDocRef = assetsCol.doc(linkedCashAssetId);
                 const cashSnapshot = await cashDocRef.get();
 
                 if (cashSnapshot.exists && cashSnapshot.data().type === 'cash') {
                     const cashAsset = { id: cashSnapshot.id, ...cashSnapshot.data() };
 
-                    // Calculate total cost
                     let totalCost = type === 'real_estate'
                         ? (prc * qty) + (parseFloat(expense) || 0) - (parseFloat(deposit) || 0)
                         : qty * prc;
@@ -313,7 +312,7 @@ export async function POST(request) {
                     }
 
                     let newCashQty = cashAsset.quantity;
-                    const cashAction = action === 'buy' ? 'sell' : 'buy'; // If buying asset, selling(deducting) cash
+                    const cashAction = action === 'buy' ? 'sell' : 'buy';
 
                     if (action === 'buy') {
                         newCashQty = cashAsset.quantity - totalCost;
@@ -321,29 +320,32 @@ export async function POST(request) {
                         newCashQty = cashAsset.quantity + totalCost;
                     }
 
-                    // Update cash asset
                     await cashDocRef.update({
                         quantity: newCashQty,
-                        principal: newCashQty * (cashAsset.avgPrice || 1), // Optional depending on how cash avgPrice is handled
+                        principal: newCashQty * (cashAsset.avgPrice || 1),
                         updatedAt: FieldValue.serverTimestamp()
                     });
 
-                    // Add transaction for cash asset
-                    await trxCol.add({
+                    // 현금 거래 추가 후 ID를 원본 거래에 저장
+                    const cashTxRef = trxCol.doc();
+                    await cashTxRef.set({
                         asset_id: cashAsset.id,
                         action: cashAction,
                         date,
                         quantity: totalCost,
-                        price: 1, // Cash price is essentially 1 in its currency
+                        price: 1,
                         region: cashAsset.region,
                         investmentCountry: cashAsset.investmentCountry || cashAsset.region,
                         type: 'cash',
                         name: cashAsset.name,
                         symbol: cashAsset.symbol || cashAsset.name,
                         account: cashAsset.account || '일반',
-                        memo: '자동 연동', // Flag or description for automatic sync
+                        memo: '자동 연동',
                         createdAt: FieldValue.serverTimestamp()
                     });
+
+                    // 원본 거래에 연동된 현금 거래 ID 저장 (삭제 시 역추적용)
+                    await mainTxRef.update({ linkedCashTxId: cashTxRef.id });
                 }
             } catch (cashError) {
                 console.error("Failed to update linked cash asset:", cashError);

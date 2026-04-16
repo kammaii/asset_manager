@@ -67,9 +67,21 @@ export async function DELETE(request, { params }) {
         const txSnap = await txRef.get();
         if (!txSnap.exists) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
-        const assetId = txSnap.data().asset_id;
+        const { asset_id: assetId, linkedCashTxId } = txSnap.data();
 
         await txRef.delete();
+
+        // 연동 현금 거래가 있으면 함께 삭제 후 현금 자산 재계산
+        if (linkedCashTxId) {
+            const cashTxRef = adminDb.collection('users').doc(uid).collection('transactions').doc(linkedCashTxId);
+            const cashTxSnap = await cashTxRef.get();
+            if (cashTxSnap.exists) {
+                const cashAssetId = cashTxSnap.data().asset_id;
+                await cashTxRef.delete();
+                await recalculateAsset(uid, cashAssetId);
+            }
+        }
+
         await recalculateAsset(uid, assetId);
 
         return NextResponse.json({ success: true }, { status: 200 });
