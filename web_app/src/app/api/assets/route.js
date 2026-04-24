@@ -278,7 +278,7 @@ export async function POST(request) {
 
         // Insert transaction record with denormalized asset info
         const mainTxRef = trxCol.doc();
-        await mainTxRef.set({
+        const txData = {
             asset_id: assetId,
             action,
             date,
@@ -291,7 +291,11 @@ export async function POST(request) {
             symbol: symbol || '',
             account: account || '일반',
             createdAt: FieldValue.serverTimestamp()
-        });
+        };
+        if (linkedCashAssetId) {
+            txData.linkedCashAssetId = linkedCashAssetId;
+        }
+        await mainTxRef.set(txData);
 
         // 3. Handle Linked Cash Asset if provided
         if (linkedCashAssetId) {

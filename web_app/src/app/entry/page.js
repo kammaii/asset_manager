@@ -135,6 +135,15 @@ export default function EntryPage() {
         const isMatchingTab = paramTab === activeTab;
         const shouldUseParams = isMatchingTab && hasActionOrName;
 
+        let defaultLinkedCashId = '';
+        if (['stock', 'pension'].includes(activeTab)) {
+            // 가장 최근의 같은 자산 유형 거래 중 linkedCashAssetId가 있는 것을 찾음 (transactions는 기본적으로 최신순)
+            const recentTxWithLink = transactions.find(t => t.type === activeTab && t.linkedCashAssetId);
+            if (recentTxWithLink) {
+                defaultLinkedCashId = recentTxWithLink.linkedCashAssetId;
+            }
+        }
+
         setFormData({
             action: shouldUseParams && paramAction ? paramAction : 'buy',
             date: new Date().toISOString().split('T')[0],
@@ -147,7 +156,9 @@ export default function EntryPage() {
             price: '',
             expense: '',
             deposit: '',
-            linkedCashAssetId: ''
+            realEstateCurrentPrice: '',
+            goldCurrentPrice: '',
+            linkedCashAssetId: defaultLinkedCashId
         });
         setEditingId(null);
         setVisibleCount(10);
@@ -157,6 +168,22 @@ export default function EntryPage() {
             window.history.replaceState({}, '', `/entry?tab=${activeTab}`);
         }
     }, [activeTab, mounted]);
+
+    // 지난 입력의 연동 계좌 기본값 설정 (transactions 로드 지연 처리)
+    useEffect(() => {
+        if (transactions.length > 0 && ['stock', 'pension'].includes(activeTab) && !editingId) {
+            const recentTxWithLink = transactions.find(t => t.type === activeTab && t.linkedCashAssetId);
+            if (recentTxWithLink) {
+                setFormData(prev => {
+                    // 유저가 아직 선택하지 않았거나 초기화 상태일 때만 설정
+                    if (!prev.linkedCashAssetId) {
+                        return { ...prev, linkedCashAssetId: recentTxWithLink.linkedCashAssetId };
+                    }
+                    return prev;
+                });
+            }
+        }
+    }, [transactions, activeTab, editingId]);
 
     const addInstitution = async () => {
         if (newInstitution.trim() && !cashInstitutions.includes(newInstitution.trim())) {
@@ -1192,6 +1219,7 @@ export default function EntryPage() {
                                         <p className="text-xs text-slate-500">핸드폰을 바꿔도, 브라우저를 초기화해도 데이터는 영원히 안전합니다.</p>
                                     </div>
                                 </li>
+                                {/* AI 기능 임시 비활성화
                                 <li className="flex items-start gap-3">
                                     <div className="p-1 bg-purple-100 rounded-full mt-0.5">
                                         <Check size={14} className="text-purple-600" />
@@ -1201,6 +1229,7 @@ export default function EntryPage() {
                                         <p className="text-xs text-slate-500">무제한 AI 어드바이저와 실시간 인사이트를 받으세요.</p>
                                     </div>
                                 </li>
+                                */}
                             </ul>
                             <div className="flex flex-col gap-3">
                                 <button 

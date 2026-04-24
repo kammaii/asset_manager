@@ -43,7 +43,8 @@ export async function POST(request) {
             enabledAssetTypes,
             hasMigratedV2,
             targetAssetRatios,
-            targetTotalAmount
+            targetTotalAmount,
+            cashUpdateDate
         } = body;
 
         const docRef = adminDb.collection('users').doc(uid).collection('settings').doc('general');
@@ -58,6 +59,7 @@ export async function POST(request) {
         if (hasMigratedV2 !== undefined) updateData.hasMigratedV2 = hasMigratedV2;
         if (targetAssetRatios !== undefined) updateData.targetAssetRatios = targetAssetRatios;
         if (targetTotalAmount !== undefined) updateData.targetTotalAmount = targetTotalAmount;
+        if (cashUpdateDate !== undefined) updateData.cashUpdateDate = cashUpdateDate;
 
         await docRef.set(updateData, { merge: true });
 

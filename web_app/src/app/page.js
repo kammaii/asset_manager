@@ -5,8 +5,9 @@ import Link from 'next/link';
 import useAssetStore from '@/store/useAssetStore';
 import { ComposedChart, Bar, Line, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, Bell, Search, PlusCircle, User, GripHorizontal, MoreHorizontal, ArrowLeft, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, AlertTriangle } from 'lucide-react';
-import AiAdvisor from '@/components/AiAdvisor';
-import AiInsights from '@/components/AiInsights';
+// AI 기능 임시 비활성화
+// import AiAdvisor from '@/components/AiAdvisor';
+// import AiInsights from '@/components/AiInsights';
 // 모든 자산 유형 메타데이터: id -> { label, labelEn, color(hex), bgColor, activeClass, icon }
 const ASSET_META = {
   stock: { label: '주식', labelEn: 'Stocks', color: '#3b82f6', bgClass: 'bg-blue-50', activeClass: 'bg-blue-100 text-blue-600', icon: CandlestickChart },
@@ -31,7 +32,7 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, isLoggedIn, isPro, user, error, getAuthHeaders } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, cashUpdateDate, isLoggedIn, isPro, user, error, getAuthHeaders } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
   // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
   const includeMap = {};
@@ -191,6 +192,35 @@ export default function Dashboard() {
 
   const achievementRate = targetTotalAmount > 0 ? (displayTotalAssets / targetTotalAmount) * 100 : 0;
 
+  // 현금 최신화 알림 계산
+  let showCashUpdateAlert = false;
+  if (cashUpdateDate) {
+    const today = new Date();
+    let targetMonth = today.getMonth();
+    let targetYear = today.getFullYear();
+    const updateDay = parseInt(cashUpdateDate);
+    
+    // 만약 오늘이 기준일보다 이전이면 저번 달 기준일을 타겟으로 함
+    if (today.getDate() < updateDay) {
+        targetMonth -= 1;
+        if (targetMonth < 0) {
+            targetMonth = 11;
+            targetYear -= 1;
+        }
+    }
+    
+    // JS Date는 날짜 초과 시 자동으로 보정해 줌 (예: 2월 31일 -> 3월 3일)
+    const targetDate = new Date(targetYear, targetMonth, updateDay);
+    targetDate.setHours(0,0,0,0);
+    const targetDateStr = targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0');
+
+    // transactions 중 타입이 'cash'인 가장 최근 거래의 날짜가 targetDateStr 이상이면 업데이트 한 것
+    const hasRecentCashUpdate = transactions.some(tx => tx.type === 'cash' && tx.date >= targetDateStr);
+    
+    if (!hasRecentCashUpdate) {
+        showCashUpdateAlert = true;
+    }
+  }
 
   // 리밸런싱 알림 계산
   const rebalancingAlerts = [];
@@ -407,6 +437,27 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* 현금 갱신 알림 배너 */}
+        {showCashUpdateAlert && (
+          <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-2xl p-4 sm:p-5 text-white shadow-lg shadow-emerald-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm border border-white/20">
+                <Banknote size={24} className="text-emerald-100" />
+              </div>
+              <div>
+                <h4 className="font-black text-lg">이번 달 현금 자산을 최신화해주세요</h4>
+                <p className="text-emerald-100 text-sm font-medium">설정하신 알림 기준일({cashUpdateDate}일)이 지났으나 현금 자산 정보가 아직 갱신되지 않았습니다.</p>
+              </div>
+            </div>
+            <Link 
+              href="/entry?tab=cash"
+              className="px-6 py-2.5 bg-white text-emerald-600 font-black rounded-xl hover:bg-emerald-50 transition-all shadow-md whitespace-nowrap"
+            >
+              현금 갱신하기
+            </Link>
+          </div>
+        )}
+
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
           <div>
@@ -510,7 +561,9 @@ export default function Dashboard() {
           })}
         </div>
 
+        {/* AI 기능 임시 비활성화
         <AiInsights />
+        */}
 
         {/* 리밸런싱 알림 섹션 */}
         {rebalancingAlerts.length > 0 && (
@@ -539,6 +592,7 @@ export default function Dashboard() {
               ))}
             </div>
             <div className="mt-4 flex justify-end">
+              {/* AI 기능 임시 비활성화
               <button
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('openAiAdvisor', {
@@ -549,6 +603,7 @@ export default function Dashboard() {
               >
                 AI 어드바이저에게 리밸런싱 상담하기 →
               </button>
+              */}
             </div>
           </div>
         )}
@@ -1023,8 +1078,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* AI 어드바이저 챗봇 */}
-      <AiAdvisor />
+      {/* AI 어드바이저 챗봇 임시 비활성화 */}
+      {/* <AiAdvisor /> */}
     </div>
   );
 }

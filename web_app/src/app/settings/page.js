@@ -28,11 +28,12 @@ const COLOR_CLASSES = {
 };
 
 export default function SettingsPage() {
-    const { enabledAssetTypes, targetAssetRatios, targetTotalAmount, fetchSettings, updateSettings, loading, assets, isLoggedIn, user, login, logout, isPro, maxFreeAssets } = useAssetStore();
+    const { enabledAssetTypes, targetAssetRatios, targetTotalAmount, cashUpdateDate, fetchSettings, updateSettings, loading, assets, isLoggedIn, user, login, logout, isPro, maxFreeAssets } = useAssetStore();
     const router = useRouter();
     const [localEnabled, setLocalEnabled] = useState([]);
     const [localRatios, setLocalRatios] = useState({});
     const [localTargetAmount, setLocalTargetAmount] = useState(0);
+    const [localCashUpdateDate, setLocalCashUpdateDate] = useState('');
     const [mounted, setMounted] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -52,7 +53,10 @@ export default function SettingsPage() {
         if (targetTotalAmount !== undefined) {
             setLocalTargetAmount(targetTotalAmount);
         }
-    }, [enabledAssetTypes, targetAssetRatios, targetTotalAmount]);
+        if (cashUpdateDate !== undefined) {
+            setLocalCashUpdateDate(cashUpdateDate || '');
+        }
+    }, [enabledAssetTypes, targetAssetRatios, targetTotalAmount, cashUpdateDate]);
 
     const toggleAssetType = (id) => {
         setLocalEnabled(prev => {
@@ -91,7 +95,8 @@ export default function SettingsPage() {
         await updateSettings({
             enabledAssetTypes: localEnabled,
             targetAssetRatios: localRatios,
-            targetTotalAmount: localTargetAmount
+            targetTotalAmount: localTargetAmount,
+            cashUpdateDate: localCashUpdateDate ? parseInt(localCashUpdateDate) : null
         });
         setSaving(false);
         setSaved(true);
@@ -101,7 +106,8 @@ export default function SettingsPage() {
     const hasChanges =
         JSON.stringify(localEnabled.sort()) !== JSON.stringify([...(enabledAssetTypes || [])].sort()) ||
         JSON.stringify(localRatios) !== JSON.stringify(targetAssetRatios || {}) ||
-        localTargetAmount !== targetTotalAmount;
+        localTargetAmount !== targetTotalAmount ||
+        (localCashUpdateDate || null) != (cashUpdateDate || null);
 
     // 로컬 데이터 개수 계산
     const localAssetCount = assets.filter(a => a.id.startsWith('local_')).length;
@@ -212,9 +218,11 @@ export default function SettingsPage() {
                                             <li className="flex items-center gap-2 text-sm text-slate-300">
                                                 <Check size={16} className="text-blue-400" /> 자산 무제한 등록 및 다중 기기 동기화
                                             </li>
+                                            {/* AI 기능 임시 비활성화
                                             <li className="flex items-center gap-2 text-sm text-slate-300">
                                                 <Check size={16} className="text-blue-400" /> 프리미엄 AI 어드바이저 무제한 사용
                                             </li>
+                                            */}
                                         </ul>
                                     </div>
                                     <button 
@@ -387,6 +395,45 @@ export default function SettingsPage() {
                             정확한 리밸런싱 조언을 위해 비중 합계를 100%로 맞추는 것을 권장합니다.
                         </div>
                     )}
+                </div>
+
+                {/* 현금 자산 최신화 알림 설정 */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-200">
+                        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <Banknote size={20} className="text-emerald-500" />
+                            현금 자산 최신화 알림 기준일
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            매월 현금 자산을 최신화할 날짜(예: 월급날)를 지정하세요. 해당 일자가 되면 대시보드에서 알림을 띄워드립니다.
+                        </p>
+                    </div>
+                    <div className="p-6 flex flex-col gap-2">
+                        <label className="text-sm font-bold text-slate-700">매월 알림 일자 (1~31)</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                value={localCashUpdateDate}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || (parseInt(val) >= 1 && parseInt(val) <= 31)) {
+                                        setLocalCashUpdateDate(val);
+                                    }
+                                }}
+                                placeholder="예: 21"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all text-right pr-10"
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-sans">일</span>
+                        </div>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                            <button onClick={() => setLocalCashUpdateDate('10')} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-600 transition-colors">매월 10일</button>
+                            <button onClick={() => setLocalCashUpdateDate('21')} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-600 transition-colors">매월 21일</button>
+                            <button onClick={() => setLocalCashUpdateDate('25')} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-600 transition-colors">매월 25일</button>
+                            <button onClick={() => setLocalCashUpdateDate('')} className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-500 transition-colors ml-auto">알림 끄기</button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* 안내 메시지 */}

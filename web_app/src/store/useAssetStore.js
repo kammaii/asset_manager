@@ -25,6 +25,7 @@ const useAssetStore = create(
             preferredIncludeMap: {}, // 대시보드 포함/불포함 설정값 (로컬 저장용)
             targetAssetRatios: {},  // 목표 자산 비중 (Phase 3)
             targetTotalAmount: 0,   // 목표 자산 총액 (Phase 3 추가)
+            cashUpdateDate: null,   // 현금 최신화 알림 기준일 (Phase 3 추가)
             loading: false,
             error: null,
 
@@ -379,6 +380,7 @@ const useAssetStore = create(
                         })(),
                         targetAssetRatios: data.targetAssetRatios || {},
                         targetTotalAmount: data.targetTotalAmount || 0,
+                        cashUpdateDate: data.cashUpdateDate || null,
                     });
                 } catch (error) {
                     console.error('Failed to load settings:', error);
@@ -497,7 +499,8 @@ const useAssetStore = create(
                 enabledAssetTypes: state.enabledAssetTypes,
                 preferredIncludeMap: state.preferredIncludeMap,
                 targetAssetRatios: state.targetAssetRatios,
-                targetTotalAmount: state.targetTotalAmount
+                targetTotalAmount: state.targetTotalAmount,
+                cashUpdateDate: state.cashUpdateDate
             }),
         }
     )
