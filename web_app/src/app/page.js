@@ -375,8 +375,12 @@ export default function Dashboard() {
 
   // Fallback
   if (chartHistory.length === 0) {
+    const includedTotal = (enabledAssetTypes || []).reduce((sum, typeId) => {
+      if (!includeMap[typeId]) return sum;
+      return sum + (currentSummaryData[HISTORY_KEYS[typeId]] || 0);
+    }, 0);
     chartHistory = [
-      { displayLabel: '01.01', totalValue: summary.totalAssets || 0 }
+      { ...currentSummaryData, displayLabel: '오늘', includedTotal }
     ];
   }
 
@@ -735,12 +739,12 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-bold text-slate-900">자산 변동 추이</h3>
             </div>
-            <div className="flex-1 w-full h-[250px] mt-4">
+            <div className="w-full min-h-[300px] mt-4 relative">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <ComposedChart data={chartHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="displayLabel" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => value === 0 ? '0' : `${parseFloat((value / 100000000).toFixed(2))}억`} />
+                  <XAxis dataKey="displayLabel" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} minTickGap={20} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} width={45} tickFormatter={(value) => value === 0 ? '0' : `${parseFloat((value / 100000000).toFixed(1))}억`} />
                   <Tooltip
                     formatter={(value, name) => [
                       formatCurrency(value),
@@ -845,32 +849,34 @@ export default function Dashboard() {
 
           return (
             <div key={assetType} className="rounded-xl bg-white border border-slate-200 overflow-hidden mt-6">
-              <div className="p-6 border-b border-slate-200 flex justify-between items-center gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <h3 className="text-lg font-bold text-slate-900 shrink-0">{title} 보유 현황 리스트</h3>
-                  {filteredAssets.length > 0 && (
-                    <div className="flex items-center gap-2 pl-3 border-l-2 border-slate-200">
-                      <span className="text-base font-black text-slate-800 tracking-tight">
-                        {assetType === 'cash' && formatCurrency(tableTotal.totalKRW)}
-                        {assetType === 'gold' && formatCurrency(tableTotal.totalValue, 'KR')}
-                        {assetType === 'real_estate' && formatCurrency(tableTotal.totalCurrentPrice)}
-                        {assetType === 'car' && formatCurrency(tableTotal.totalPurchase, 'KR')}
-                        {!['cash', 'gold', 'real_estate', 'car'].includes(assetType) && formatCurrency(tableTotal.totalValueKRW)}
-                      </span>
-                      {!['cash', 'car'].includes(assetType) && (() => {
-                        const profit = tableTotal.totalProfit ?? tableTotal.totalProfitKRW ?? 0;
-                        const rate = tableTotal.totalProfitRate ?? 0;
-                        const isPositive = profit >= 0;
-                        return (
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isPositive ? 'text-[#ff4d4f] bg-red-50' : 'text-[#0d7ff2] bg-blue-50'}`}>
-                            {profit > 0 ? '+' : ''}{formatCurrency(profit)}&nbsp;({rate > 0 ? '+' : ''}{rate.toFixed(2)}%)
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  )}
+              <div className="p-4 md:p-6 border-b border-slate-200 flex flex-col gap-3">
+                <div className="flex justify-between items-start w-full">
+                  <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 min-w-0">
+                    <h3 className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title} 보유 현황 리스트</h3>
+                    {filteredAssets.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm md:text-base font-black text-slate-800 tracking-tight">
+                          {assetType === 'cash' && formatCurrency(tableTotal.totalKRW)}
+                          {assetType === 'gold' && formatCurrency(tableTotal.totalValue, 'KR')}
+                          {assetType === 'real_estate' && formatCurrency(tableTotal.totalCurrentPrice)}
+                          {assetType === 'car' && formatCurrency(tableTotal.totalPurchase, 'KR')}
+                          {!['cash', 'gold', 'real_estate', 'car'].includes(assetType) && formatCurrency(tableTotal.totalValueKRW)}
+                        </span>
+                        {!['cash', 'car'].includes(assetType) && (() => {
+                          const profit = tableTotal.totalProfit ?? tableTotal.totalProfitKRW ?? 0;
+                          const rate = tableTotal.totalProfitRate ?? 0;
+                          const isPositive = profit >= 0;
+                          return (
+                            <span className={`text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-md ${isPositive ? 'text-[#ff4d4f] bg-red-50' : 'text-[#0d7ff2] bg-blue-50'}`}>
+                              {profit > 0 ? '+' : ''}{formatCurrency(profit)}&nbsp;({rate > 0 ? '+' : ''}{rate.toFixed(2)}%)
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                  <Link href={`/entry?tab=${assetType}`} className="text-[10px] md:text-sm font-bold text-[#0d7ff2] hover:underline shrink-0 bg-blue-50 md:bg-transparent px-2 py-1.5 md:p-0 rounded-lg ml-2">추가/관리</Link>
                 </div>
-                <Link href={`/entry?tab=${assetType}`} className="text-sm font-medium text-[#0d7ff2] hover:underline shrink-0">자산 추가/관리하기</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[700px]">
