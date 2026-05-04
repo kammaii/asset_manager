@@ -17,6 +17,7 @@ const ASSET_META = {
   gold: { label: '금(Gold)', labelEn: 'Gold', color: '#eab308', bgClass: 'bg-amber-50', activeClass: 'bg-amber-100 text-amber-600', icon: Gem },
   crypto: { label: '가상화폐', labelEn: 'Crypto', color: '#06b6d4', bgClass: 'bg-cyan-50', activeClass: 'bg-cyan-100 text-cyan-600', icon: Bitcoin },
   car: { label: '자동차', labelEn: 'Vehicle', color: '#64748b', bgClass: 'bg-slate-100', activeClass: 'bg-slate-200 text-slate-600', icon: Car },
+  liability: { label: '부채', labelEn: 'Liability', color: '#ef4444', bgClass: 'bg-red-50', activeClass: 'bg-red-100 text-red-600', icon: AlertTriangle },
 };
 
 // Recharts에서 쓰는 색상 맵 (라벨 기반)
@@ -32,7 +33,7 @@ const DRILLDOWN_COLORS = {
 };
 
 export default function Dashboard() {
-  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, cashUpdateDate, isLoggedIn, isPro, user, error, getAuthHeaders } = useAssetStore();
+  const { assets, fetchAssets, history, dailyHistory, fetchHistory, loading, getSummary, enabledAssetTypes, fetchSettings, transactions, fetchTransactions, preferredIncludeMap, setPreferredIncludeMap, targetAssetRatios, targetTotalAmount, cashUpdateDate, isLoggedIn, isPro, user, error, getAuthHeaders, login } = useAssetStore();
   const [filter, setFilter] = useState('DAILY');
   // 각 자산 유형의 포함 여부를 동적으로 관리 (저장된 설정 없으면 true)
   const includeMap = {};
@@ -134,7 +135,7 @@ export default function Dashboard() {
   };
 
   // 자산 유형 정렬 순서 정의
-  const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'];
+  const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car', 'liability'];
 
   const toggleInclude = (typeId) => {
     const nextValue = !(preferredIncludeMap?.[typeId] ?? true);
@@ -161,6 +162,7 @@ export default function Dashboard() {
     gold: { total: 'totalGold', profit: 'goldProfit', rate: 'goldRate' },
     real_estate: { total: 'totalRealEstate', profit: 'realEstateProfit', rate: 'realEstateRate' },
     car: { total: 'totalCar', profit: 'carProfit', rate: 'carRate' },
+    liability: { total: 'totalLiability', profit: 'liabilityProfit', rate: 'liabilityRate' },
   };
 
   const HISTORY_KEYS = {
@@ -170,19 +172,31 @@ export default function Dashboard() {
     real_estate: 'realEstateValue',
     gold: 'goldValue',
     crypto: 'cryptoValue',
-    car: 'carValue'
+    car: 'carValue',
+    liability: 'liabilityValue'
   };
 
   const sortedEnabledTypes = [...(enabledAssetTypes || [])].sort((a, b) => {
     return PREFERRED_ORDER.indexOf(a) - PREFERRED_ORDER.indexOf(b);
   });
 
-  const displayTotalAssets = (enabledAssetTypes || []).reduce((sum, type) => {
+  // 순수 자산 합계 (부채 제외)
+  const grossAssets = (enabledAssetTypes || []).reduce((sum, type) => {
+    if (type === 'liability') return sum;
     const key = SUMMARY_KEYS[type];
     return sum + (key ? (summary[key.total] || 0) : 0);
   }, 0);
 
+  // 부채 합계
+  const totalLiabilityAmount = (enabledAssetTypes || []).includes('liability')
+    ? (summary[SUMMARY_KEYS.liability.total] || 0)
+    : 0;
+
+  // 순자산 = 자산 합계 - 부채 합계
+  const displayTotalAssets = grossAssets - totalLiabilityAmount;
+
   const displayTotalProfit = (enabledAssetTypes || []).reduce((sum, type) => {
+    if (type === 'liability') return sum;
     const key = SUMMARY_KEYS[type];
     return sum + (key ? (summary[key.profit] || 0) : 0);
   }, 0);
@@ -226,6 +240,7 @@ export default function Dashboard() {
   const rebalancingAlerts = [];
   if (targetAssetRatios && Object.keys(targetAssetRatios).length > 0) {
     const totalActualValue = (enabledAssetTypes || []).reduce((sum, type) => {
+      if (type === 'liability') return sum;
       const key = SUMMARY_KEYS[type];
       return sum + (key ? (summary[key.total] || 0) : 0);
     }, 0);
@@ -325,6 +340,7 @@ export default function Dashboard() {
     goldValue: summary.totalGold || 0,
     cryptoValue: summary.totalCrypto || 0,
     carValue: summary.totalCar || 0,
+    liabilityValue: summary.totalLiability || 0,
     totalValue: displayTotalAssets
   };
 
@@ -430,14 +446,22 @@ export default function Dashboard() {
                 <p className="text-blue-100 text-sm font-medium">지금 클라우드에 백업하여 브라우저 초기화나 기기 분실로부터 자산을 안전하게 보호하세요.</p>
               </div>
             </div>
-            <button 
-              onClick={() => {
-                window.location.href = '/settings';
-              }}
-              className="px-6 py-2.5 bg-white text-blue-600 font-black rounded-xl hover:bg-blue-50 transition-all shadow-md whitespace-nowrap"
-            >
-              10초 만에 백업하기
-            </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <button 
+                onClick={login}
+                className="flex-1 sm:flex-none px-6 py-2.5 bg-blue-700/30 text-white font-bold rounded-xl hover:bg-blue-700/50 transition-all border border-white/20 whitespace-nowrap"
+              >
+                로그인
+              </button>
+              <button 
+                onClick={() => {
+                  window.location.href = '/settings';
+                }}
+                className="flex-1 sm:flex-none px-6 py-2.5 bg-white text-blue-600 font-black rounded-xl hover:bg-blue-50 transition-all shadow-md whitespace-nowrap"
+              >
+                10초 만에 백업하기
+              </button>
+            </div>
           </div>
         )}
 
@@ -496,13 +520,19 @@ export default function Dashboard() {
             <div className="flex-1 flex flex-col gap-1 w-full">
               <div className="flex justify-between items-center relative z-10">
                 <p className="text-sm font-medium text-slate-500 flex flex-col">
-                  <span>전체 자산 요약</span>
-                  <span className="text-[11px] opacity-70">Portfolio Summary</span>
+                  <span>순자산 요약 (부채 차감)</span>
+                  <span className="text-[11px] opacity-70">Net Assets</span>
                 </p>
               </div>
               <div className="flex items-end gap-2 mt-1 relative z-10">
                 <span className="text-3xl font-bold text-slate-900 tracking-tight">{formatCurrency(displayTotalAssets)}</span>
               </div>
+              {totalLiabilityAmount > 0 && (
+                <div className="flex items-center gap-1 mt-1 relative z-10 text-xs text-slate-400">
+                  <span>총자산 {formatCurrency(grossAssets)}</span>
+                  <span className="text-red-400 font-bold">- 부채 {formatCurrency(totalLiabilityAmount)}</span>
+                </div>
+              )}
 
               <div className={`flex items-center gap-2 mt-2 text-sm font-bold relative z-10 ${displayTotalProfit >= 0 ? 'text-[#ef4444]' : 'text-[#3b82f6]'}`}>
                 {displayTotalProfit >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
@@ -681,8 +711,14 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               {!drillDownCategory ? (
-                // 일반 모드: 전체 자산 유형 범례 (토글 가능)
-                (enabledAssetTypes || []).map((typeId) => {
+                // 일반 모드: 전체 자산 유형 범례 (토글 가능) - 보유 금액 큰 순 정렬
+                [...(enabledAssetTypes || [])]
+                  .sort((a, b) => {
+                    const valA = summary[SUMMARY_KEYS[a]?.total] || 0;
+                    const valB = summary[SUMMARY_KEYS[b]?.total] || 0;
+                    return valB - valA;
+                  })
+                  .map((typeId) => {
                   const meta = ASSET_META[typeId];
                   if (!meta) return null;
                   const value = summary[SUMMARY_KEYS[typeId]?.total] || 0;
@@ -909,6 +945,13 @@ export default function Dashboard() {
                         <th className="p-4 min-w-[150px]">이름</th>
                         <th className="p-4 text-right">매수가</th>
                       </tr>
+                    ) : assetType === 'liability' ? (
+                      <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
+                        <th className="p-4 w-32">발생일</th>
+                        <th className="p-4 min-w-[150px]">부채명</th>
+                        <th className="p-4 text-right">금액</th>
+                        <th className="p-4 text-right">이자율</th>
+                      </tr>
                     ) : (
                       <tr className="border-b border-slate-200 text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-50">
                         <th className="p-4">구분</th>
@@ -1001,6 +1044,19 @@ export default function Dashboard() {
                               <td className="p-4 font-bold text-slate-900">{asset.name}</td>
                               <td className="p-4 text-right font-bold text-slate-900 font-mono">
                                 {formatCurrency(asset.principal, 'KR')}
+                              </td>
+                            </>
+                          ) : assetType === 'liability' ? (
+                            <>
+                              <td className="p-4 text-slate-500 whitespace-nowrap">
+                                {transactions?.find(t => t.asset_id === asset.id)?.date || '-'}
+                              </td>
+                              <td className="p-4 font-bold text-slate-900">{asset.name}</td>
+                              <td className="p-4 text-right font-bold text-slate-900 font-mono text-red-600">
+                                {formatCurrency(asset.principal, 'KR')}
+                              </td>
+                              <td className="p-4 text-right font-medium text-slate-600">
+                                {asset.interestRate ? `${asset.interestRate}%` : '-'}
                               </td>
                             </>
                           ) : (

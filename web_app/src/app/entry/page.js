@@ -13,6 +13,7 @@ const ASSET_META = {
     gold: { label: '금', labelEn: 'Gold', icon: Gem },
     crypto: { label: '가상화폐', labelEn: 'Crypto', icon: Bitcoin },
     car: { label: '자동차', labelEn: 'Vehicle', icon: Car },
+    liability: { label: '부채', labelEn: 'Liability', icon: TrendingDown },
 };
 
 export default function EntryPage() {
@@ -47,6 +48,7 @@ export default function EntryPage() {
         deposit: '',
         realEstateCurrentPrice: '',
         goldCurrentPrice: '',
+        interestRate: '',
         linkedCashAssetId: ''
     });
 
@@ -137,10 +139,15 @@ export default function EntryPage() {
 
         let defaultLinkedCashId = '';
         if (['stock', 'pension'].includes(activeTab)) {
-            // 가장 최근의 같은 자산 유형 거래 중 linkedCashAssetId가 있는 것을 찾음 (transactions는 기본적으로 최신순)
-            const recentTxWithLink = transactions.find(t => t.type === activeTab && t.linkedCashAssetId);
-            if (recentTxWithLink) {
-                defaultLinkedCashId = recentTxWithLink.linkedCashAssetId;
+            const savedLinkedId = typeof window !== 'undefined' ? localStorage.getItem(`lastLinkedCashAssetId_${activeTab}`) : null;
+            if (savedLinkedId) {
+                defaultLinkedCashId = savedLinkedId === 'NONE' ? '' : savedLinkedId;
+            } else {
+                // 가장 최근의 같은 자산 유형 거래 중 linkedCashAssetId가 있는 것을 찾음 (transactions는 기본적으로 최신순)
+                const recentTxWithLink = transactions.find(t => t.type === activeTab && t.linkedCashAssetId);
+                if (recentTxWithLink) {
+                    defaultLinkedCashId = recentTxWithLink.linkedCashAssetId;
+                }
             }
         }
 
@@ -158,6 +165,7 @@ export default function EntryPage() {
             deposit: '',
             realEstateCurrentPrice: '',
             goldCurrentPrice: '',
+            interestRate: '',
             linkedCashAssetId: defaultLinkedCashId
         });
         setEditingId(null);
@@ -171,13 +179,22 @@ export default function EntryPage() {
 
     // 지난 입력의 연동 계좌 기본값 설정 (transactions 로드 지연 처리)
     useEffect(() => {
-        if (transactions.length > 0 && ['stock', 'pension'].includes(activeTab) && !editingId) {
-            const recentTxWithLink = transactions.find(t => t.type === activeTab && t.linkedCashAssetId);
-            if (recentTxWithLink) {
+        if (['stock', 'pension'].includes(activeTab) && !editingId) {
+            const savedLinkedId = typeof window !== 'undefined' ? localStorage.getItem(`lastLinkedCashAssetId_${activeTab}`) : null;
+            let targetId = null;
+            
+            if (savedLinkedId) {
+                targetId = savedLinkedId === 'NONE' ? '' : savedLinkedId;
+            } else if (transactions.length > 0) {
+                const recentTxWithLink = transactions.find(t => t.type === activeTab && t.linkedCashAssetId);
+                if (recentTxWithLink) targetId = recentTxWithLink.linkedCashAssetId;
+            }
+
+            if (targetId !== null) {
                 setFormData(prev => {
                     // 유저가 아직 선택하지 않았거나 초기화 상태일 때만 설정
-                    if (!prev.linkedCashAssetId) {
-                        return { ...prev, linkedCashAssetId: recentTxWithLink.linkedCashAssetId };
+                    if (prev.linkedCashAssetId === '') {
+                        return { ...prev, linkedCashAssetId: targetId };
                     }
                     return prev;
                 });
@@ -286,6 +303,10 @@ export default function EntryPage() {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+        
+        if (name === 'linkedCashAssetId' && ['stock', 'pension'].includes(activeTab)) {
+            localStorage.setItem(`lastLinkedCashAssetId_${activeTab}`, value || 'NONE');
+        }
     };
 
     const handleEdit = (trx) => {
@@ -303,7 +324,8 @@ export default function EntryPage() {
             expense: trx.expense?.toString() || '',
             deposit: trx.deposit?.toString() || '',
             realEstateCurrentPrice: trx.realEstateCurrentPrice?.toString() || '',
-            goldCurrentPrice: trx.goldCurrentPrice?.toString() || ''
+            goldCurrentPrice: trx.goldCurrentPrice?.toString() || '',
+            interestRate: trx.interestRate?.toString() || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -333,7 +355,7 @@ export default function EntryPage() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '', linkedCashAssetId: '' });
+        setFormData({ action: 'buy', date: new Date().toISOString().split('T')[0], region: 'KR', investmentCountry: 'KR', account: '일반', symbol: '', name: '', quantity: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', goldCurrentPrice: '', interestRate: '', linkedCashAssetId: '' });
     };
 
     const handleDeleteClick = (id) => {
@@ -379,6 +401,11 @@ export default function EntryPage() {
                     alert("필수 항목을 모두 입력해주세요 (차량 번호/코드, 자산 명칭, 날짜, 체결 단가).");
                     return;
                 }
+            } else if (activeTab === 'liability') {
+                if (!formData.name || !formData.date || !formData.price || !formData.interestRate) {
+                    alert("필수 항목을 모두 입력해주세요 (부채명, 발생일, 부채 금액, 이자율).");
+                    return;
+                }
             } else {
                 if (!formData.name || !formData.quantity || !formData.price || !formData.action || !formData.date) {
                     alert("필수 항목을 모두 입력해주세요 (종목명, 수량, 단가, 날짜, 매수/매도).");
@@ -405,6 +432,8 @@ export default function EntryPage() {
                     updatePayload.realEstateCurrentPrice = parseFloat(formData.realEstateCurrentPrice) || 0;
                 } else if (activeTab === 'gold') {
                     updatePayload.goldCurrentPrice = parseFloat(formData.goldCurrentPrice) || parseFloat(formData.price) || 0;
+                } else if (activeTab === 'liability') {
+                    updatePayload.interestRate = parseFloat(formData.interestRate) || 0;
                 }
                 await updateTransaction(editingId, updatePayload);
                 cancelEdit();
@@ -456,7 +485,7 @@ export default function EntryPage() {
                     linkedCashAssetId: formData.linkedCashAssetId || null,
                     exchangeRate: currentExchangeRate || 1400
                 });
-                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', linkedCashAssetId: '' }));
+                setFormData(prev => ({ ...prev, name: '', price: '', expense: '', deposit: '', realEstateCurrentPrice: '', linkedCashAssetId: prev.linkedCashAssetId }));
             } else if (activeTab === 'car') {
                 await addAsset({
                     type: activeTab,
@@ -472,7 +501,24 @@ export default function EntryPage() {
                     linkedCashAssetId: formData.linkedCashAssetId || null,
                     exchangeRate: currentExchangeRate || 1400
                 });
-                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', linkedCashAssetId: '' }));
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', linkedCashAssetId: prev.linkedCashAssetId }));
+            } else if (activeTab === 'liability') {
+                await addAsset({
+                    type: activeTab,
+                    action: 'buy',
+                    date: formData.date,
+                    region: 'KR',
+                    investmentCountry: 'KR',
+                    account: '일반',
+                    symbol: '',
+                    name: formData.name,
+                    quantity: 1,
+                    price: parseFloat(formData.price),
+                    interestRate: parseFloat(formData.interestRate) || 0,
+                    linkedCashAssetId: formData.linkedCashAssetId || null,
+                    exchangeRate: currentExchangeRate || 1400
+                });
+                setFormData(prev => ({ ...prev, name: '', quantity: '', price: '', interestRate: '', linkedCashAssetId: prev.linkedCashAssetId }));
             } else {
                 await addAsset({
                     type: activeTab,
@@ -490,7 +536,7 @@ export default function EntryPage() {
                     exchangeRate: currentExchangeRate || 1400
                 });
 
-                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '', linkedCashAssetId: '' }));
+                setFormData(prev => ({ ...prev, symbol: '', name: '', quantity: '', price: '', goldCurrentPrice: '', linkedCashAssetId: prev.linkedCashAssetId }));
             }
         } catch (e) {
             console.error("오류 발생: " + e.message);
@@ -558,7 +604,7 @@ export default function EntryPage() {
                     <div className="border-b border-slate-200">
                         <div className="flex px-6 gap-8 overflow-x-auto border-b border-slate-200">
                             {(() => {
-                                const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'];
+                                const PREFERRED_ORDER = ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car', 'liability'];
                                 const sortedTabs = (enabledAssetTypes || []).sort((a, b) => {
                                     return PREFERRED_ORDER.indexOf(a) - PREFERRED_ORDER.indexOf(b);
                                 });
@@ -674,6 +720,25 @@ export default function EntryPage() {
                                     <div className="flex flex-col gap-1 min-w-[120px]">
                                         <label className="text-xs font-semibold text-slate-500">현재가</label>
                                         <input type="number" name="realEstateCurrentPrice" value={formData.realEstateCurrentPrice || ''} onChange={handleInputChange} placeholder="0" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
+                                    </div>
+                                </>
+                            ) : activeTab === 'liability' ? (
+                                <>
+                                    <div className="flex flex-col gap-1 min-w-[130px]">
+                                        <label className="text-xs font-semibold text-slate-500">부채명 (대출명 등)</label>
+                                        <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ex: 주택담보대출" className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[130px]">
+                                        <label className="text-xs font-semibold text-slate-500">날짜</label>
+                                        <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="border border-slate-300 rounded px-2 py-1.5 text-sm" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[120px]">
+                                        <label className="text-xs font-semibold text-slate-500">부채 금액</label>
+                                        <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="Ex: 50000000" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-[100px]">
+                                        <label className="text-xs font-semibold text-slate-500">이자율 (%)</label>
+                                        <input type="number" step="0.01" name="interestRate" value={formData.interestRate || ''} onChange={handleInputChange} placeholder="Ex: 4.5" className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
                                     </div>
                                 </>
                             ) : (
@@ -834,7 +899,7 @@ export default function EntryPage() {
                                         </div>
                                     ) : (
                                         <>
-                                            {(activeTab !== 'gold') && (
+                                            {(activeTab !== 'gold' && activeTab !== 'liability') && (
                                                 <div className="flex flex-col gap-1 min-w-[120px]">
                                                     <label className="text-xs font-semibold text-slate-500">
                                                         {activeTab === 'car' ? '차량 번호 / 관리 코드' : '종목코드 (선택)'}
@@ -852,11 +917,11 @@ export default function EntryPage() {
                                     )}
                                     <div className="flex flex-col gap-1 min-w-[120px]">
                                         <label className="text-xs font-semibold text-slate-500">
-                                            {activeTab === 'gold' ? '매수 단가 (1돈당)' : activeTab === 'car' ? '차량 매수가' : (['stock', 'pension', 'crypto'].includes(activeTab)) ? '체결 단가' : '체결 단가 (환율)'}
+                                            {activeTab === 'gold' ? '매수 단가 (1돈당)' : activeTab === 'car' ? '차량 매수가' : activeTab === 'liability' ? '부채 금액' : (['stock', 'pension', 'crypto'].includes(activeTab)) ? '체결 단가' : '체결 단가 (환율)'}
                                         </label>
                                         <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder={activeTab === 'cash' ? "원화는 1" : "0"} className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono" />
                                     </div>
-                                    {activeTab !== 'car' && (
+                                    {activeTab !== 'car' && activeTab !== 'liability' && (
                                         <div className="flex flex-col gap-1 min-w-[100px]">
                                             <label className="text-xs font-semibold text-slate-500">
                                                 {activeTab === 'gold' ? '거래 수량 (돈)' : '거래 수량'}
@@ -872,9 +937,25 @@ export default function EntryPage() {
                                             />
                                         </div>
                                     )}
+                                    {activeTab === 'liability' && (
+                                        <div className="flex flex-col gap-1 min-w-[100px]">
+                                            <label className="text-xs font-semibold text-slate-500">
+                                                이자율 (%)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="interestRate"
+                                                value={formData.interestRate}
+                                                onChange={handleInputChange}
+                                                placeholder="0.00"
+                                                step="0.01"
+                                                className="border border-slate-300 rounded px-2 py-1.5 text-sm text-right font-mono"
+                                            />
+                                        </div>
+                                    )}
                                 </>
                             )}
-                            {activeTab !== 'cash' && (
+                            {activeTab !== 'cash' && activeTab !== 'liability' && (
                                 <div className="flex flex-col gap-1 w-full mt-2 pt-3 border-t border-slate-100">
                                     <label className="text-xs font-semibold text-slate-700">
                                         <span className="text-[#0d7ff2]">연동 현금결제 계좌</span> (자동 증감 처리)
@@ -976,6 +1057,14 @@ export default function EntryPage() {
                                             <th className="px-4 py-3 font-semibold w-24 text-left">차량번호</th>
                                             <th className="px-4 py-3 font-semibold min-w-[150px] text-left">이름</th>
                                             <th className="px-4 py-3 font-semibold text-right">매수가</th>
+                                            <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
+                                        </tr>
+                                    ) : activeTab === 'liability' ? (
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold w-24 text-left">날짜</th>
+                                            <th className="px-4 py-3 font-semibold min-w-[150px] text-left">부채명</th>
+                                            <th className="px-4 py-3 font-semibold text-right">금액</th>
+                                            <th className="px-4 py-3 font-semibold text-right">이자율</th>
                                             <th className="px-4 py-3 font-semibold text-center w-24">관리</th>
                                         </tr>
                                     ) : (
@@ -1086,6 +1175,13 @@ export default function EntryPage() {
                                                             <td className="px-4 py-3 font-medium text-slate-900">{trx.symbol || '-'}</td>
                                                             <td className="px-4 py-3 text-slate-800 font-bold">{trx.name}</td>
                                                             <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">{formatCurrency(trx.price * trx.quantity, trx.region)}</td>
+                                                        </>
+                                                    ) : activeTab === 'liability' ? (
+                                                        <>
+                                                            <td className="px-4 py-3 text-slate-500">{trx.date}</td>
+                                                            <td className="px-4 py-3 text-slate-800 font-bold">{trx.name}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-900 font-bold font-mono">{formatCurrency(trx.price, trx.region || 'KR')}</td>
+                                                            <td className="px-4 py-3 text-right text-slate-600 font-mono">{trx.interestRate ? `${trx.interestRate}%` : '-'}</td>
                                                         </>
                                                     ) : activeTab === 'gold' ? (
                                                         <>

@@ -16,7 +16,7 @@ const useAssetStore = create(
             savedStockItems: [],
             savedPensionItems: [],
             savedCryptoItems: [],
-            enabledAssetTypes: ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car'],
+            enabledAssetTypes: ['stock', 'crypto', 'cash', 'pension', 'gold', 'real_estate', 'car', 'liability'],
             isPro: false, // 유료 구독 여부
             isLoggedIn: false, // 로그인 여부
             user: null, // 유저 정보
@@ -370,11 +370,12 @@ const useAssetStore = create(
                         savedPensionItems: data.savedPensionItems || [],
                         savedCryptoItems: data.savedCryptoItems || [],
                         enabledAssetTypes: (() => {
-                            let types = data.enabledAssetTypes || ['stock', 'pension', 'cash', 'real_estate', 'gold', 'crypto', 'car'];
-                            // Force append crypto and car if they are entirely missing from a legacy user's config
+                            let types = data.enabledAssetTypes || ['stock', 'pension', 'cash', 'real_estate', 'gold', 'crypto', 'car', 'liability'];
+                            // Force append crypto, car, liability if they are entirely missing from a legacy user's config
                             if (!data.hasMigratedV2) {
                                 if (!types.includes('crypto')) types.push('crypto');
                                 if (!types.includes('car')) types.push('car');
+                                if (!types.includes('liability')) types.push('liability');
                             }
                             return [...new Set(types)];
                         })(),
@@ -416,11 +417,11 @@ const useAssetStore = create(
                 const convert = (val, asset) => (asset.region === 'US' && asset.type !== 'cash' ? (val || 0) * exchangeRate : (val || 0));
 
                 // overall
-                const totalAssets = assets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
-                const totalPrincipal = assets.reduce((sum, a) => sum + convert(a.netInvestment !== undefined ? a.netInvestment : a.principal, a), 0);
-                const totalProfit = assets.reduce((sum, a) => sum + convert(a.profitGain, a), 0);
+                const totalAssets = assets.reduce((sum, a) => a.type !== 'liability' ? sum + convert(a.totalValue, a) : sum, 0);
+                const totalPrincipal = assets.reduce((sum, a) => a.type !== 'liability' ? sum + convert(a.netInvestment !== undefined ? a.netInvestment : a.principal, a) : sum, 0);
+                const totalProfit = assets.reduce((sum, a) => a.type !== 'liability' ? sum + convert(a.profitGain, a) : sum, 0);
                 const profitRate = totalPrincipal > 0 ? (totalProfit / totalPrincipal) * 100 : 0;
-                const dayChange = assets.reduce((sum, a) => sum + convert(a.dayChange, a), 0);
+                const dayChange = assets.reduce((sum, a) => a.type !== 'liability' ? sum + convert(a.dayChange, a) : sum, 0);
 
                 // stock
                 const stockAssets = assets.filter(a => a.type === 'stock');
@@ -471,6 +472,13 @@ const useAssetStore = create(
                 const carProfit = totalCar - carPrincipal;
                 const carRate = carPrincipal > 0 ? (carProfit / carPrincipal) * 100 : 0;
 
+                // liability
+                const liabilityAssets = assets.filter(a => a.type === 'liability');
+                const totalLiability = liabilityAssets.reduce((sum, a) => sum + convert(a.totalValue, a), 0);
+                const liabilityPrincipal = liabilityAssets.reduce((sum, a) => sum + convert(a.principal, a), 0);
+                const liabilityProfit = totalLiability - liabilityPrincipal;
+                const liabilityRate = liabilityPrincipal > 0 ? (liabilityProfit / liabilityPrincipal) * 100 : 0;
+
                 return {
                     totalAssets, totalPrincipal, totalProfit, profitRate, dayChange,
                     totalStock, stockProfit, stockRate, stockPrincipal,
@@ -479,7 +487,8 @@ const useAssetStore = create(
                     totalRealEstate, realEstateProfit, realEstateRate, realEstatePrincipal,
                     totalGold, goldProfit, goldRate, goldPrincipal,
                     totalCrypto, cryptoProfit, cryptoRate, cryptoPrincipal,
-                    totalCar, carProfit, carRate, carPrincipal
+                    totalCar, carProfit, carRate, carPrincipal,
+                    totalLiability, liabilityProfit, liabilityRate, liabilityPrincipal
                 };
             },
         }),

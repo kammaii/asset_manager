@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAssetStore from '@/store/useAssetStore';
-import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft, PieChart, Target, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Wallet, Settings, CandlestickChart, PiggyBank, Banknote, Building, Gem, Bitcoin, Car, GripVertical, Plus, X, Check, ArrowLeft, PieChart, Target, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
 // 앱에서 지원하는 모든 자산 유형 정의
 const ALL_ASSET_TYPES = [
@@ -15,6 +15,7 @@ const ALL_ASSET_TYPES = [
     { id: 'gold', icon: Gem, label: '금', labelEn: 'Gold', color: 'amber' },
     { id: 'real_estate', icon: Building, label: '부동산', labelEn: 'Real Estate', color: 'orange' },
     { id: 'car', icon: Car, label: '자동차', labelEn: 'Vehicle', color: 'slate' },
+    { id: 'liability', icon: TrendingDown, label: '부채', labelEn: 'Liability', color: 'red' },
 ];
 
 const COLOR_CLASSES = {
@@ -25,6 +26,7 @@ const COLOR_CLASSES = {
     amber: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', ring: 'ring-amber-400' },
     cyan: { bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-200', ring: 'ring-cyan-400' },
     slate: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-300', ring: 'ring-slate-400' },
+    red: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', ring: 'ring-red-400' },
 };
 
 export default function SettingsPage() {
@@ -100,7 +102,7 @@ export default function SettingsPage() {
         });
         setSaving(false);
         setSaved(true);
-        // router.push('/'); // Keep on settings to see results
+        router.push('/');
     };
 
     const hasChanges =

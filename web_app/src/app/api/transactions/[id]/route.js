@@ -102,7 +102,7 @@ export async function PUT(request, { params }) {
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 
         const body = await request.json();
-        const { date, quantity, price, action, type, region, symbol, name, account, expense, deposit, realEstateCurrentPrice, investmentCountry } = body;
+        const { date, quantity, price, action, type, region, symbol, name, account, expense, deposit, realEstateCurrentPrice, investmentCountry, interestRate } = body;
 
         const assetsCol = adminDb.collection('users').doc(uid).collection('assets');
         const txRef = adminDb.collection('users').doc(uid).collection('transactions').doc(id);
@@ -157,7 +157,7 @@ export async function PUT(request, { params }) {
 
         const resolvedPrice = (type === 'cash' && queryRegion === 'US' && !price) ? 1 : (price || tx.price);
 
-        await txRef.update({
+        const txUpdateData = {
             date: date || tx.date,
             quantity: quantity || tx.quantity,
             price: resolvedPrice,
@@ -169,7 +169,13 @@ export async function PUT(request, { params }) {
             name: name || tx.name,
             symbol: querySymbol,
             account: account || tx.account || '일반'
-        });
+        };
+
+        if (type === 'liability' && interestRate !== undefined) {
+            txUpdateData.interestRate = parseFloat(interestRate) || 0;
+        }
+
+        await txRef.update(txUpdateData);
 
         if (oldAssetId !== newAssetId) {
             await recalculateAsset(uid, oldAssetId);
@@ -183,6 +189,10 @@ export async function PUT(request, { params }) {
                 expense: parseFloat(expense) || 0,
                 deposit: parseFloat(deposit) || 0,
                 realEstateCurrentPrice: parseFloat(realEstateCurrentPrice) || 0,
+            });
+        } else if (type === 'liability') {
+            await assetsCol.doc(newAssetId).update({
+                interestRate: parseFloat(interestRate) || 0,
             });
         }
 

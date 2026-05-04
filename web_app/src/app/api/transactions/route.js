@@ -58,7 +58,8 @@ export async function GET(request) {
         investmentCountry: data.investmentCountry || asset.investmentCountry || data.region || asset.region || 'KR',
         symbol: data.symbol !== undefined ? data.symbol : asset.symbol,
         name: data.name || asset.name,
-        asset_id: data.asset_id
+        asset_id: data.asset_id,
+        ...(data.interestRate !== undefined ? { interestRate: data.interestRate } : asset.interestRate !== undefined ? { interestRate: asset.interestRate } : {})
       };
     });
 

@@ -182,7 +182,7 @@ export async function POST(request) {
         }
 
         const body = await request.json();
-        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry, linkedCashAssetId, exchangeRate } = body;
+        const { type, region, symbol, name, quantity, price, action, date, account, expense, deposit, realEstateCurrentPrice, goldCurrentPrice, investmentCountry, linkedCashAssetId, exchangeRate, interestRate } = body;
 
         if (!type || !name || quantity === undefined || price === undefined || !action || !date) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -245,6 +245,8 @@ export async function POST(request) {
                 if (realEstateCurrentPrice !== undefined) updateData.realEstateCurrentPrice = parseFloat(realEstateCurrentPrice) || 0;
             } else if (type === 'gold') {
                 if (goldCurrentPrice !== undefined) updateData.goldCurrentPrice = parseFloat(goldCurrentPrice) || 0;
+            } else if (type === 'liability') {
+                if (interestRate !== undefined) updateData.interestRate = parseFloat(interestRate) || 0;
             }
             await assetsCol.doc(asset.id).update(updateData);
         } else {
@@ -270,6 +272,8 @@ export async function POST(request) {
                 newAssetData.realEstateCurrentPrice = realEstateCurrentPrice ? parseFloat(realEstateCurrentPrice) : newAvgPrice;
             } else if (type === 'gold') {
                 newAssetData.goldCurrentPrice = goldCurrentPrice ? parseFloat(goldCurrentPrice) : newAvgPrice;
+            } else if (type === 'liability') {
+                newAssetData.interestRate = interestRate ? parseFloat(interestRate) : 0;
             }
             const newDocRef = assetsCol.doc();
             await newDocRef.set(newAssetData);
@@ -292,6 +296,9 @@ export async function POST(request) {
             account: account || '일반',
             createdAt: FieldValue.serverTimestamp()
         };
+        if (type === 'liability' && interestRate !== undefined) {
+            txData.interestRate = parseFloat(interestRate) || 0;
+        }
         if (linkedCashAssetId) {
             txData.linkedCashAssetId = linkedCashAssetId;
         }
